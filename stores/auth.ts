@@ -1,0 +1,199 @@
+import { create } from 'zustand';
+import { supabase } from '@/lib/supabase';
+
+interface User {
+  id: string;
+  email: string;
+  name?: string;
+  isPremium: boolean;
+}
+
+interface AuthState {
+  initialized: boolean;
+  isAuthenticated: boolean;
+  user: User | null;
+  login: (email: string, password: string) => Promise<User>;
+  register: (email: string, password: string, name: string) => Promise<User>;
+  logout: () => Promise<void>;
+  updateUser: (updates: Partial<User>) => Promise<User>;
+  upgradeAccount: () => Promise<User>;
+  cancelSubscription: () => Promise<User>;
+}
+
+export const useAuth = create<AuthState>((set, get) => ({
+  initialized: false,
+  isAuthenticated: false,
+  user: null,
+  
+  login: async (email: string, password: string) => {
+    const { data: { user }, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) throw error;
+    if (!user) throw new Error('No user returned from login');
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single();
+
+    if (!profile) throw new Error('No profile found');
+
+    const userData: User = {
+      id: profile.id,
+      email: profile.email,
+      name: profile.name || undefined,
+      isPremium: profile.is_premium,
+    };
+
+    set({ user: userData, isAuthenticated: true });
+    return userData;
+  },
+  
+  register: async (email: string, password: string, name: string) => {
+    const { data: { user }, error } = await supabase.auth.signUp({
+      email,
+      password,
+    });
+
+    if (error) throw error;
+    if (!user) throw new Error('No user returned from registration');
+
+    // Profile is created automatically via database trigger
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single();
+
+    if (!profile) throw new Error('No profile found');
+
+    // Update the profile with the name
+    const { data: updatedProfile, error: updateError } = await supabase
+      .from('profiles')
+      .update({ name })
+      .eq('id', user.id)
+      .select()
+      .single();
+
+    if (updateError) throw updateError;
+    if (!updatedProfile) throw new Error('Failed to update profile');
+
+    const userData: User = {
+      id: updatedProfile.id,
+      email: updatedProfile.email,
+      name: updatedProfile.name || undefined,
+      isPremium: updatedProfile.is_premium,
+    };
+
+    set({ user: userData, isAuthenticated: true });
+    return userData;
+  },
+  
+  logout: async () => {
+    await supabase.auth.signOut();
+    set({ user: null, isAuthenticated: false });
+  },
+  
+  updateUser: async (updates: Partial<User>) => {
+    const { user } = get();
+    if (!user) throw new Error('Not authenticated');
+
+    const { data: updatedProfile, error } = await supabase
+      .from('profiles')
+      .update({
+        name: updates.name,
+        email: updates.email,
+      })
+      .eq('id', user.id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    if (!updatedProfile) throw new Error('Failed to update profile');
+
+    const userData: User = {
+      ...user,
+      ...updates,
+    };
+
+    set({ user: userData });
+    return userData;
+  },
+  
+  upgradeAccount: async () => {
+    const { user } = get();
+    if (!user) throw new Error('Not authenticated');
+
+    const { data: updatedProfile, error } = await supabase
+      .from('profiles')
+      .update({ is_premium: true })
+      .eq('id', user.id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    if (!updatedProfile) throw new Error('Failed to upgrade account');
+
+    const userData: User = {
+      ...user,
+      isPremium: true,
+    };
+
+    set({ user: userData });
+    return userData;
+  },
+
+  cancelSubscription: async () => {
+    const { user } = get();
+    if (!user) throw new Error('Not authenticated');
+
+    const { data: updatedProfile, error } = await supabase
+      .from('profiles')
+      .update({ is_premium: false })
+      .eq('id', user.id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    if (!updatedProfile) throw new Error('Failed to cancel subscription');
+
+    const userData: User = {
+      ...user,
+      isPremium: false,
+    };
+
+    set({ user: userData });
+    return userData;
+  },
+}));
+
+// Initialize auth state
+supabase.auth.onAuthStateChange((event, session) => {
+  if (event === 'SIGNED_IN' && session?.user) {
+    // Fetch user profile
+    supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', session.user.id)
+      .single()
+      .then(({ data: profile }) => {
+        if (profile) {
+          const userData: User = {
+            id: profile.id,
+            email: profile.email,
+            name: profile.name || undefined,
+            isPremium: profile.is_premium,
+          };
+          useAuth.setState({ user: userData, isAuthenticated: true, initialized: true });
+        }
+      });
+  } else if (event === 'SIGNED_OUT') {
+    useAuth.setState({ user: null, isAuthenticated: false, initialized: true });
+  } else {
+    useAuth.setState({ initialized: true });
+  }
+});
