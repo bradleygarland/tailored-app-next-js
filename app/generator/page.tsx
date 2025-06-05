@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -15,6 +15,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { headers } from 'next/headers';
 import { Progress } from "@/components/ui/progress";
 import Navbar from '@/components/Navbar';
 import Editor from '@/components/Editor';
@@ -22,14 +23,16 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/stores/auth';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/lib/supabase'
 
 const PLACEHOLDER_TEXT = "Your generated cover letter will appear here. Once generated, you can edit it directly in this editor.";
 const MAX_FREE_GENERATIONS = 3;
 
 export default function Generator() {
   const router = useRouter();
-  const { isLoggedIn } = useAuth();
+  const { isAuthenticated } = useAuth();
   const { toast } = useToast();
+
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
@@ -38,6 +41,7 @@ export default function Generator() {
     position: '',
     jobDescription: ''
   });
+
   const [generatedLetter, setGeneratedLetter] = useState('');
   const [generationCount, setGenerationCount] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -45,13 +49,16 @@ export default function Generator() {
     }
     return 0;
   });
+
   const [showAuthPrompt, setShowAuthPrompt] = useState(false);
+
   const [hasAcceptedTerms, setHasAcceptedTerms] = useState(() => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('hasAcceptedTerms') === 'true';
     }
     return false;
   });
+
   const [showTermsDialog, setShowTermsDialog] = useState(false);
   const [acceptTerms, setAcceptTerms] = useState(false);
 
@@ -62,6 +69,28 @@ export default function Generator() {
     if (!hasAcceptedTerms) {
       setShowTermsDialog(true);
     }
+
+    const fetchUsage = async () => {
+      try {
+        const session = await supabase.auth.getSession();
+        const token = session.data.session?.access_token;
+
+        const res = await fetch('/api/usage', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'x-forwarded-for': '123.456.789.0'
+          }
+        });
+
+        if (!res.ok) console.error('Failed to fetch usage.');
+        const data = await res.json();
+        setGenerationCount(data.usageCount);
+      } catch (err) {
+        console.error('Failed to fetch generation usage.', err);
+      }
+    };
+
+    fetchUsage();
   }, [hasAcceptedTerms]);
 
   const handleAcceptTerms = () => {
@@ -80,45 +109,66 @@ export default function Generator() {
 
 
   // Submit Generation
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    setLoading(true);
+    setError(null);
 
     if (!hasAcceptedTerms) {
       setShowTermsDialog(true);
+      setLoading(false);
       return;
     }
 
-    if (!isLoggedIn && generationCount >= MAX_FREE_GENERATIONS) {
+    if (!isAuthenticated && generationCount >= MAX_FREE_GENERATIONS) {
       setShowAuthPrompt(true);
+      setLoading(false);
       return;
     }
 
-    // Handle form submission and AI generation here
-    console.log('Generating cover letter with:', formData);
-    // Placeholder generated letter
-    setGeneratedLetter(`Dear Hiring Manager,
+    try {
+      const res = await fetch('/api/generate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('supabase.auth.token')}`
+        },
+        body: JSON.stringify(formData)
+      });
 
-I am writing to express my sincere interest in the ${formData.position} position at ${formData.company}. With my relevant experience and skills, I am confident in my ability to contribute meaningfully to your team.
+      const data = await res.json();
 
-[Generated content will appear here based on the job description and your information]
+      if (!res.ok) {
+        setError(data.error || 'Something went wrong.');
+        toast({
+          title: "Error generating cover letter",
+          description: data.error || 'Please try again.',
+          variant: "destructive"
+        });
+      } else {
+        setGeneratedLetter(data.generatedLetter);
+        console.log(`Remaining generations ${data.remainingGenerations}`);
+        toast({
+          title: "Cover letter generated",
+          description: "Your cover letter has been generated successfully.",
+        });
 
-Thank you for considering my application. I look forward to discussing how I can contribute to ${formData.company}.
-
-Best regards,
-${formData.fullName}
-${formData.email}
-${formData.phone}`);
-
-    if (!isLoggedIn) {
-      const newCount = generationCount + 1;
-      setGenerationCount(newCount);
-      localStorage.setItem('generationCount', newCount.toString());
+        if (!isAuthenticated) {
+          const newCount = generationCount + 1;
+          localStorage.setItem('generationCount', newCount.toString());
+        }
+      }
+    } catch (error) {
+      setError('An unexpected error occured.');
+      toast({
+        title: "Unexpected error",
+        description: "Please try again later.",
+        variant: "destructive"
+      });
     }
 
-    toast({
-      title: "Cover letter generated",
-      description: "Your cover letter has been generated successfully."
-    });
+    setLoading(false);
   };
 
   const handleTransferToEditor = () => {
@@ -152,7 +202,7 @@ ${formData.phone}`);
       <Navbar />
       <main className="min-h-screen bg-gray-50 pt-24 pb-8">
         <div className="max-w-7xl mx-auto px-6">
-          {!isLoggedIn && (
+          {!isAuthenticated && (
             <Card className="mb-6">
               <CardContent className="py-6">
                 <div className="flex flex-col md:flex-row items-center justify-between gap-4">
@@ -252,14 +302,14 @@ ${formData.phone}`);
                   <Button 
                     type="submit" 
                     className="w-full"
-                    disabled={!isLoggedIn && generationCount >= MAX_FREE_GENERATIONS}
+                    disabled={!isAuthenticated && generationCount >= MAX_FREE_GENERATIONS}
                   >
                     Generate Cover Letter
                   </Button>
 
-                  {!isLoggedIn && generationCount >= MAX_FREE_GENERATIONS && (
+                  {!isAuthenticated && generationCount >= MAX_FREE_GENERATIONS && (
                     <p className="text-sm text-muted-foreground text-center">
-                      You've reached the limit for free generations.{' '}
+                      You&#39;ve reached the limit for free generations.{' '}
                       <Link href="/signup" className="text-primary hover:underline">
                         Sign up
                       </Link>
@@ -301,7 +351,7 @@ ${formData.phone}`);
           <DialogHeader>
             <DialogTitle>Free Generation Limit Reached</DialogTitle>
             <DialogDescription>
-              You've used all your free generations. Sign up for unlimited access to our AI-powered cover letter generator.
+              You&#39;ve used all your free generations. Sign up for unlimited access to our AI-powered cover letter generator.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="flex-col sm:flex-row gap-2">
@@ -327,7 +377,7 @@ ${formData.phone}`);
             <div className="prose prose-sm">
               <h3 className="text-lg font-semibold mb-2">1. Acceptance of Terms</h3>
               <p className="mb-4">
-                By accessing and using CoverAI's services, you agree to be bound by these Terms of Service and all applicable laws and regulations.
+                By accessing and using CoverAI&#39;s services, you agree to be bound by these Terms of Service and all applicable laws and regulations.
               </p>
 
               <h3 className="text-lg font-semibold mb-2">2. Use of Service</h3>
