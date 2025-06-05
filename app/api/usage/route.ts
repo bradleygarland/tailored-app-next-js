@@ -10,13 +10,14 @@ export async function GET(req: NextRequest) {
     const supabase = createClient()
 
     const ip = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || req.headers.get('cf-connecting-ip') || req.ip || 'unknown';
+
+    // Console log IP on GET
     console.log('GET', ip);
 
     const token = req.headers.get('authorization')?.split(' ')[1] || '';
 
     const { data: { user } } = await supabase.auth.getUser(token);
     const userId = user?.id;
-    console.log('user: ', user);
 
     const identifier = userId || ip;
 
@@ -31,8 +32,8 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Failed to fetch usage data' }, { status: 500 })
     }
 
+    // Console log user if exists on GET
     console.log('user_id', userId);
-    console.log('ip: ', userId ? null : ip);
 
     if (!existingRow) {
       const insertRes = await supabase.from('generation_usage').insert([{
