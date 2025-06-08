@@ -67,6 +67,7 @@ export default function SignUp() {
         description: error instanceof Error ? error.message : "An error occurred",
         variant: "destructive"
       });
+      console.log("Signup failed", error);
     } finally {
       setIsLoading(false);
     }

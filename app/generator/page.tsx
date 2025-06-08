@@ -15,7 +15,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { headers } from 'next/headers';
 import { Progress } from "@/components/ui/progress";
 import Navbar from '@/components/Navbar';
 import Editor from '@/components/Editor';
@@ -43,12 +42,7 @@ export default function Generator() {
   });
 
   const [generatedLetter, setGeneratedLetter] = useState('');
-  const [generationCount, setGenerationCount] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return parseInt(localStorage.getItem('generationCount') || '0', 10);
-    }
-    return 0;
-  });
+  const [generationCount, setGenerationCount] = useState(0);
 
   const [showAuthPrompt, setShowAuthPrompt] = useState(false);
 
@@ -65,12 +59,17 @@ export default function Generator() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const remainingGenerations = MAX_FREE_GENERATIONS - generationCount;
+  const progressPercentage = (generationCount / MAX_FREE_GENERATIONS) * 100;
+
   useEffect(() => {
     if (!hasAcceptedTerms) {
       setShowTermsDialog(true);
     }
+  }, [hasAcceptedTerms]);
 
-    const fetchUsage = async () => {
+  useEffect (() => {
+    (async () => {
       try {
         const session = await supabase.auth.getSession();
         const token = session.data.session?.access_token;
@@ -78,20 +77,19 @@ export default function Generator() {
         const res = await fetch('/api/usage', {
           headers: {
             'Authorization': `Bearer ${token}`,
-            'x-forwarded-for': '123.456.789.0'
+            'x-forwarded-for': '123.456.789.0', // dev testing on localhost
           }
         });
 
         if (!res.ok) console.error('Failed to fetch usage.');
         const data = await res.json();
         setGenerationCount(data.usageCount);
+        console.log(data.usageCount)
       } catch (err) {
         console.error('Failed to fetch generation usage.', err);
       }
-    };
-
-    fetchUsage();
-  }, [hasAcceptedTerms]);
+    })();
+  }, [])
 
   const handleAcceptTerms = () => {
     if (acceptTerms) {
@@ -128,11 +126,15 @@ export default function Generator() {
     }
 
     try {
+      const session = await supabase.auth.getSession();
+      const token = session.data.session?.access_token;
+
       const res = await fetch('/api/generate', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('supabase.auth.token')}`
+          'Authorization': `Bearer ${token}`,
+          'x-forwarded-for': '123.456.789.0',
         },
         body: JSON.stringify(formData)
       });
@@ -148,7 +150,6 @@ export default function Generator() {
         });
       } else {
         setGeneratedLetter(data.generatedLetter);
-        console.log(`Remaining generations ${data.remainingGenerations}`);
         toast({
           title: "Cover letter generated",
           description: "Your cover letter has been generated successfully.",
@@ -194,38 +195,35 @@ export default function Generator() {
     router.push('/editor');
   };
 
-  const remainingGenerations = MAX_FREE_GENERATIONS - generationCount;
-  const progressPercentage = (generationCount / MAX_FREE_GENERATIONS) * 100;
+
 
   return (
     <>
       <Navbar />
       <main className="min-h-screen bg-gray-50 pt-24 pb-8">
         <div className="max-w-7xl mx-auto px-6">
-          {!isAuthenticated && (
-            <Card className="mb-6">
-              <CardContent className="py-6">
-                <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-                  <div className="flex-1 w-full">
-                    <h3 className="font-semibold mb-2">
-                      {remainingGenerations > 0
-                        ? `${remainingGenerations} free generations remaining`
-                        : "Free generations limit reached"}
-                    </h3>
-                    <Progress value={progressPercentage} className="h-2" />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Link href="/login">
-                      <Button variant="outline">Log in</Button>
-                    </Link>
-                    <Link href="/signup">
-                      <Button>Sign up for unlimited access</Button>
-                    </Link>
-                  </div>
+          <Card className="mb-6">
+            <CardContent className="py-6">
+              <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+                <div className="flex-1 w-full">
+                  <h3 className="font-semibold mb-2">
+                    {remainingGenerations > 0
+                      ? `${remainingGenerations} free generations remaining`
+                      : "Free generations limit reached"}
+                  </h3>
+                  <Progress value={progressPercentage} className="h-2" />
                 </div>
-              </CardContent>
-            </Card>
-          )}
+                <div className="flex items-center gap-2">
+                  <Link href="/login">
+                    <Button variant="outline">Log in</Button>
+                  </Link>
+                  <Link href="/signup">
+                    <Button>Sign up for unlimited access</Button>
+                  </Link>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Left side - Form */}

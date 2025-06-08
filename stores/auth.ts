@@ -173,6 +173,9 @@ export const useAuth = create<AuthState>((set, get) => ({
 
 // Initialize auth state
 supabase.auth.onAuthStateChange((event, session) => {
+  // DEV CONSOLE log event & session
+  console.log('event', event);
+  console.log('session', session);
   if (event === 'SIGNED_IN' && session?.user) {
     // Fetch user profile
     supabase
@@ -189,6 +192,8 @@ supabase.auth.onAuthStateChange((event, session) => {
             isPremium: profile.is_premium,
           };
           useAuth.setState({ user: userData, isAuthenticated: true, initialized: true });
+        } else {
+          console.warn('No profile found');
         }
       });
   } else if (event === 'SIGNED_OUT') {

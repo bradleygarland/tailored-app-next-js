@@ -1,15 +1,31 @@
-import {wrapRequestHandlerWorker} from "next/dist/experimental/testmode/server";
+import {getUserOrAnonUsage} from "@/lib/usage";
+
 
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
-import { supabase } from '@/lib/supabase'
+import { createClient } from '@supabase/supabase-js';
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+
+const TEST_MAX_GENERATIONS = 3;
+
 export async function POST(req: NextRequest) {
   try {
+    const token = req.headers.get('authorization')?.split(' ')[1] || '';
+
+    const supabase = createClient(supabaseUrl, serviceRoleKey, {
+      global: {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        }
+      }
+    });
+
     const { fullName, email, phone, company, position, jobDescription } = await req.json();
 
     if (!fullName || !company || !position || !jobDescription) {
@@ -17,46 +33,35 @@ export async function POST(req: NextRequest) {
     }
 
     const ip = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || req.headers.get('cf-connecting-ip') || req.ip || 'unknown';
-    console.log(ip)
 
-    const token = req.headers.get('authorization')?.split(' ')[1] || '';
-    const { data: { user } } = await supabase.auth.getUser(token);
-    const userId = user?.id || null;
+    // Console log IP on POST
+    console.log('POST', ip);
 
-    let usage;
-    if (userId) {
-      const { data } = await supabase.from('generation_usage').select('*').eq('user_id', userId).single();
-      usage = data;
-    } else {
-      const { data } = await supabase.from('generation_usage').select('*').eq('ip_address', ip).single();
-      usage = data;
-    }
-
-    const maxFreeGenerations = userId ? 9999 : 3; // 3 for anonymous, unlimited for authenticated
-    const currentCount = usage?.count || 0;
-    const remainingGenerations = Math.max(0, maxFreeGenerations - (currentCount + 1)); // Pre-calculate next remaining
+    const usageData = await getUserOrAnonUsage(supabase, token, ip);
+    const usageCount = usageData.usageCount;
 
     // Check limit
-    if (usage && usage.count >= maxFreeGenerations) {
+    // TEST_MAX_GENERATIONS DEV VAR
+    if (usageCount && usageCount >= TEST_MAX_GENERATIONS) {
       return NextResponse.json({
         error: 'Generation limit reached.',
-        remainingGenerations: 0
       }, { status: 403 });
     }
 
-    // Update or insert usage
+    /* Update or insert usage
     if (usage) {
-      await supabase.from('generation').update({
+      await supabase.from('generation_usage').update({
         count: usage.count + 1,
-        last_generated_at: new Date()
+        last_generated_at: new Date(),
       }).eq(userId ? 'user_id' : 'ip_address', userId || ip);
     } else {
-      await supabase.from('generation_usage').insert({
+      await supabase.from('generation_usage').insert([{
         user_id: userId,
         ip_address: userId ? null : ip,
-        count: 1
-      });
-    }
+        count: 1,
+        last_generated_at: new Date(),
+      }]);
+    }*/
 
     const prompt = "Give me a singular short sentence about the date.";
 
@@ -80,8 +85,7 @@ export async function POST(req: NextRequest) {
     const generatedLetter = completion.choices[0]?.message?.content?.trim();
 
     return NextResponse.json({
-      generatedLetter,
-      remainingGenerations
+      generatedLetter
     });
   } catch (err) {
     console.error(err);
