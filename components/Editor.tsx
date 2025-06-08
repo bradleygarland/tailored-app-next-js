@@ -31,16 +31,6 @@ const theme = {
   },
 };
 
-function UpdatePlugin({ onChange }: { onChange: (editorState: EditorState) => void }) {
-  const [editor] = useLexicalComposerContext();
-  useEffect(() => {
-    return editor.registerUpdateListener(({ editorState }) => {
-      onChange(editorState);
-    });
-  }, [editor, onChange]);
-  return null;
-}
-
 function OnChangePlugin({ onChange }: { onChange: (content: string) => void }) {
   const [editor] = useLexicalComposerContext();
   useEffect(() => {
@@ -53,6 +43,20 @@ function OnChangePlugin({ onChange }: { onChange: (content: string) => void }) {
       });
     });
   }, [editor, onChange]);
+  return null;
+}
+
+function SyncContentPlugin({ content }: { content: string }) {
+  const [editor] = useLexicalComposerContext();
+  useEffect(() => {
+    editor.update(() => {
+      const root = $getRoot();
+      root.clear();
+      const paragraph = $createParagraphNode();
+      paragraph.append($createTextNode(content));
+      root.append(paragraph);
+    });
+  }, [editor, content]);
   return null;
 }
 
@@ -72,14 +76,6 @@ export default function Editor({
     onError: (error: Error) => {
       console.error(error);
     },
-    editorState: () => {
-      const root = $getRoot();
-      if (root.getTextContent() === '') {
-        const paragraph = $createParagraphNode();
-        paragraph.append($createTextNode(content));
-        root.append(paragraph);
-      }
-    },
   };
 
   return (
@@ -98,6 +94,7 @@ export default function Editor({
         <HistoryPlugin />
         <ListPlugin />
         <OnChangePlugin onChange={onChange} />
+        <SyncContentPlugin content={content} />
       </div>
     </LexicalComposer>
   );
