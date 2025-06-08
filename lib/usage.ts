@@ -57,7 +57,31 @@ export async function getUserOrAnonUsage(
 export async function updateUserOrAnonUsage(
   supabase: SupabaseClient,
   token: string | null,
-  ip: string | null
-) {
-  console.log('Updating user or anon usage');
+  ip: string | null,
+  newCount: number
+): Promise<void> {
+  console.log(`Updating user or anon usage to ${newCount}`);
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError) throw authError;
+
+  const userId = user?.id || null;
+  const identifier = userId || ip;
+
+  if (!identifier) {
+    throw new Error('Missing user ID and IP address');
+  }
+
+  const matchField = userId ? 'user_id' : 'ip_address';
+
+  const { error: updateError } = await supabase
+    .from('generation_usage')
+    .update({
+      count: newCount,
+      last_generated_at: new Date()
+    })
+    .eq(matchField, identifier);
+
+  if (updateError) {
+    throw new Error(`Error updating usage count: ${updateError.message}`);
+  }
 }

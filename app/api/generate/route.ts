@@ -1,4 +1,5 @@
-import {getUserOrAnonUsage} from "@/lib/usage";
+import { getUserOrAnonUsage, updateUserOrAnonUsage } from "@/lib/usage";
+
 
 
 export const dynamic = 'force-dynamic';
@@ -84,8 +85,13 @@ export async function POST(req: NextRequest) {
 
     const generatedLetter = completion.choices[0]?.message?.content?.trim();
 
+    // Update usage after generation
+    const newCount = usageCount + 1;
+    await updateUserOrAnonUsage(supabase, token, ip, newCount);
+
     return NextResponse.json({
-      generatedLetter
+      generatedLetter,
+      newCount
     });
   } catch (err) {
     console.error(err);

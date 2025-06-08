@@ -150,15 +150,11 @@ export default function Generator() {
         });
       } else {
         setGeneratedLetter(data.generatedLetter);
+        setGenerationCount(data.newCount);
         toast({
           title: "Cover letter generated",
           description: "Your cover letter has been generated successfully.",
         });
-
-        if (!isAuthenticated) {
-          const newCount = generationCount + 1;
-          localStorage.setItem('generationCount', newCount.toString());
-        }
       }
     } catch (error) {
       setError('An unexpected error occured.');
@@ -168,7 +164,6 @@ export default function Generator() {
         variant: "destructive"
       });
     }
-
     setLoading(false);
   };
 
