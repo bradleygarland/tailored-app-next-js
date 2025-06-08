@@ -25,7 +25,6 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase'
 
 const PLACEHOLDER_TEXT = "Your generated cover letter will appear here. Once generated, you can edit it directly in this editor.";
-const MAX_FREE_GENERATIONS = 3;
 
 export default function Generator() {
   const router = useRouter();
@@ -43,6 +42,7 @@ export default function Generator() {
 
   const [generatedLetter, setGeneratedLetter] = useState('');
   const [generationCount, setGenerationCount] = useState(0);
+  const [maxUsage, setMaxUsage] = useState(3);
 
   const [showAuthPrompt, setShowAuthPrompt] = useState(false);
 
@@ -59,8 +59,8 @@ export default function Generator() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const remainingGenerations = MAX_FREE_GENERATIONS - generationCount;
-  const progressPercentage = (generationCount / MAX_FREE_GENERATIONS) * 100;
+  const remainingGenerations = maxUsage - generationCount;
+  const progressPercentage = (generationCount / maxUsage) * 100;
 
   useEffect(() => {
     if (!hasAcceptedTerms) {
@@ -85,11 +85,23 @@ export default function Generator() {
         const data = await res.json();
         setGenerationCount(data.usageCount);
         console.log(data.usageCount)
+
+        if (isAuthenticated) {
+          const res = await fetch('/api/subscription', {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+            }
+          });
+
+          if (!res.ok) console.error('Failed to fetch subscription/plan details.');
+          const subscriptionData = await res.json();
+          setMaxUsage(subscriptionData.maxUsage);
+        }
       } catch (err) {
         console.error('Failed to fetch generation usage.', err);
       }
     })();
-  }, [])
+  }, [isAuthenticated]);
 
   const handleAcceptTerms = () => {
     if (acceptTerms) {
@@ -119,7 +131,7 @@ export default function Generator() {
       return;
     }
 
-    if (!isAuthenticated && generationCount >= MAX_FREE_GENERATIONS) {
+    if (!isAuthenticated && generationCount >= maxUsage) {
       setShowAuthPrompt(true);
       setLoading(false);
       return;
@@ -295,12 +307,12 @@ export default function Generator() {
                   <Button 
                     type="submit" 
                     className="w-full"
-                    disabled={!isAuthenticated && generationCount >= MAX_FREE_GENERATIONS}
+                    disabled={!isAuthenticated && generationCount >= maxUsage}
                   >
                     Generate Cover Letter
                   </Button>
 
-                  {!isAuthenticated && generationCount >= MAX_FREE_GENERATIONS && (
+                  {!isAuthenticated && generationCount >= maxUsage && (
                     <p className="text-sm text-muted-foreground text-center">
                       You&#39;ve reached the limit for free generations.{' '}
                       <Link href="/signup" className="text-primary hover:underline">

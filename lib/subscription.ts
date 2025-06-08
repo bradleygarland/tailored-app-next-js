@@ -1,5 +1,12 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 
+// usage limit mapping table
+export const PLAN_USAGE_LIMITS: Record<string, number> = {
+  free: 3,
+  starter: 15,
+  pro: Number.MAX_SAFE_INTEGER,
+};
+
 export async function getUserSubscriptions(
   supabase: SupabaseClient,
 ): Promise<any[]> {
