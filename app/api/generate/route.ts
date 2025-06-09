@@ -1,6 +1,5 @@
 import { getUserOrAnonUsage, updateUserOrAnonUsage } from "@/lib/usage";
-
-
+import { PLAN_USAGE_LIMITS, getUserSubscription } from "@/lib/subscription";
 
 export const dynamic = 'force-dynamic';
 
@@ -10,15 +9,10 @@ import { createClient } from '@supabase/supabase-js';
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
 );
-
-const TEST_MAX_GENERATIONS = 3;
 
 export async function POST(req: NextRequest) {
   try {
@@ -32,15 +26,21 @@ export async function POST(req: NextRequest) {
 
     const ip = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || req.headers.get('cf-connecting-ip') || req.ip || 'unknown';
 
+    // Get Max Generations from subscription
+    const plan = await getUserSubscription(supabase, token);
+    const maxGenerations = PLAN_USAGE_LIMITS[plan] ?? 0;
+
     // Console log IP on POST
     console.log('POST', ip);
 
     const usageData = await getUserOrAnonUsage(supabase, token, ip);
     const usageCount = usageData.usageCount;
 
+    console.log('usage', usageCount);
+
     // Check limit
     // TEST_MAX_GENERATIONS DEV VAR
-    if (usageCount && usageCount >= TEST_MAX_GENERATIONS) {
+    if (usageCount && usageCount >= maxGenerations) {
       return NextResponse.json({
         error: 'Generation limit reached.',
       }, { status: 403 });

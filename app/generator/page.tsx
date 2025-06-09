@@ -93,13 +93,10 @@ export default function Generator() {
         if (!res.ok) console.error('Failed to fetch usage.');
         const data = await res.json();
         setGenerationCount(data.usageCount);
-        console.log(data.usageCount)
 
         if (isAuthenticated) {
           const res = await fetch('/api/subscription', {
-            headers: {
-              'Authorization': `Bearer ${token}`,
-            }
+            headers,
           });
 
           if (!res.ok) console.error('Failed to fetch subscription/plan details.');
@@ -139,7 +136,9 @@ export default function Generator() {
       setLoading(false);
       return;
     }
-
+    console.log('isAuthenticated', isAuthenticated);
+    console.log('generation count:', generationCount);
+    console.log('maxUsage:', maxUsage);
     if (!isAuthenticated && generationCount >= maxUsage) {
       setShowAuthPrompt(true);
       setLoading(false);
@@ -223,11 +222,19 @@ export default function Generator() {
             <CardContent className="py-6">
               <div className="flex flex-col md:flex-row items-center justify-between gap-4">
                 <div className="flex-1 w-full">
-                  <h3 className="font-semibold mb-2">
-                    {remainingGenerations > 0
-                      ? `${remainingGenerations} free generations remaining`
-                      : "Free generations limit reached"}
-                  </h3>
+                  {isAuthenticated ?
+                    <h3 className="font-semibold mb-2">
+                      {remainingGenerations > 0
+                        ? `${remainingGenerations} generations remaining`
+                        : "Generation limit reached"}
+                    </h3>
+                  :
+                    <h3 className="font-semibold mb-2">
+                      {remainingGenerations > 0
+                        ? `${remainingGenerations} free generations remaining`
+                        : "Free generations limit reached"}
+                    </h3>
+                  }
                   <Progress value={progressPercentage} className="h-2" />
                 </div>
                 <div className="flex items-center gap-2">
@@ -317,7 +324,6 @@ export default function Generator() {
                   <Button 
                     type="submit" 
                     className="w-full"
-                    disabled={!isAuthenticated && generationCount >= maxUsage}
                   >
                     Generate Cover Letter
                   </Button>
