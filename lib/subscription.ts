@@ -15,7 +15,7 @@ export async function getUserSubscription(
 
   if (token) {
     const {data: {user}, error: authError} = await supabase.auth.getUser(token);
-    if (authError || !user) {
+    if (authError) {
       console.warn("getUserSubscription: Auth token provided but invalid:", authError.message);
     } else {
       userId = user?.id || null;
