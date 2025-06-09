@@ -13,19 +13,16 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+);
+
 const TEST_MAX_GENERATIONS = 3;
 
 export async function POST(req: NextRequest) {
   try {
     const token = req.headers.get('authorization')?.split(' ')[1] || '';
-
-    const supabase = createClient(supabaseUrl, serviceRoleKey, {
-      global: {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        }
-      }
-    });
 
     const { fullName, email, phone, company, position, jobDescription } = await req.json();
 

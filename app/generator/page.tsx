@@ -26,6 +26,8 @@ import { supabase } from '@/lib/supabase'
 
 const PLACEHOLDER_TEXT = "Your generated cover letter will appear here. Once generated, you can edit it directly in this editor.";
 
+const isDev = process.env.NODE_ENV === 'development';
+
 export default function Generator() {
   const router = useRouter();
   const { isAuthenticated } = useAuth();
@@ -71,14 +73,21 @@ export default function Generator() {
   useEffect (() => {
     (async () => {
       try {
+
+
+        // supabase.auth.getSession() will only return a session if the user is authenticated
         const session = await supabase.auth.getSession();
         const token = session.data.session?.access_token;
 
+        // ip spoofing for development (DELETE before prod)
+        const headers: HeadersInit = {}
+
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        if (isDev) headers['x-forwarded-for'] = '123.456.789.0';
+
+
         const res = await fetch('/api/usage', {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'x-forwarded-for': '123.456.789.0', // dev testing on localhost
-          }
+          headers,
         });
 
         if (!res.ok) console.error('Failed to fetch usage.');
@@ -141,13 +150,14 @@ export default function Generator() {
       const session = await supabase.auth.getSession();
       const token = session.data.session?.access_token;
 
+      const headers: HeadersInit = {};
+
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      if (isDev) headers['x-forwarded-for'] = '123.456.789.0';
+
       const res = await fetch('/api/generate', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-          'x-forwarded-for': '123.456.789.0',
-        },
+        headers,
         body: JSON.stringify(formData)
       });
 

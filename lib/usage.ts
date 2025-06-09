@@ -9,15 +9,22 @@ export async function getUserOrAnonUsage(
   token: string | null,
   ip: string | null
 ): Promise<UsageResponse> {
-  // Get the user from the token (client should be initialized with token)
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
-  if (authError) throw authError;
+  let userId: string | null = null;
 
-  const userId = user?.id || null;
+  if (token) {
+  // Get the user from the token (client should be initialized with token)
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    if (authError) {
+      console.warn("Auth token provided but invalid:", authError.message);
+    } else {
+      userId = user?.id || null;
+    }
+  }
+
   const identifier = userId || ip;
 
   if (!identifier) {
-    throw new Error('Missing user ID and IP address');
+    throw new Error('Missing both user ID and IP address');
   }
 
   // Try to find existing usage record
@@ -60,11 +67,19 @@ export async function updateUserOrAnonUsage(
   ip: string | null,
   newCount: number
 ): Promise<void> {
-  console.log(`Updating user or anon usage to ${newCount}`);
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
-  if (authError) throw authError;
+  let userId: string | null = null;
 
-  const userId = user?.id || null;
+  console.log(`Updating user or anon usage to ${newCount}`);
+  if (token) {
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    if (authError) {
+      console.warn("Auth token provided but invalid:", authError.message);
+    } else {
+      userId = user?.id || null;
+    }
+  }
+
+
   const identifier = userId || ip;
 
   if (!identifier) {
