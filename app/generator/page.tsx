@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -25,7 +25,8 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase'
 
 const PLACEHOLDER_TEXT = "Your generated cover letter will appear here. Once generated, you can edit it directly in this editor.";
-const MAX_FREE_GENERATIONS = 3;
+
+const isDev = process.env.NODE_ENV === 'development';
 
 export default function Generator() {
   const router = useRouter();
@@ -43,6 +44,7 @@ export default function Generator() {
 
   const [generatedLetter, setGeneratedLetter] = useState('');
   const [generationCount, setGenerationCount] = useState(0);
+  const [usageLimit, setUsageLimit] = useState(3);
 
   const [showAuthPrompt, setShowAuthPrompt] = useState(false);
 
@@ -59,8 +61,8 @@ export default function Generator() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const remainingGenerations = MAX_FREE_GENERATIONS - generationCount;
-  const progressPercentage = (generationCount / MAX_FREE_GENERATIONS) * 100;
+  const remainingGenerations = usageLimit - generationCount;
+  const progressPercentage = (generationCount / usageLimit) * 100;
 
   useEffect(() => {
     if (!hasAcceptedTerms) {
@@ -68,28 +70,50 @@ export default function Generator() {
     }
   }, [hasAcceptedTerms]);
 
-  useEffect (() => {
-    (async () => {
-      try {
-        const session = await supabase.auth.getSession();
-        const token = session.data.session?.access_token;
 
-        const res = await fetch('/api/usage', {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'x-forwarded-for': '123.456.789.0', // dev testing on localhost
-          }
+  const fetchUsage = useCallback(async () => {
+    try {
+      // supabase.auth.getSession() will only return a session if the user is authenticated
+      const session = await supabase.auth.getSession();
+      const token = session.data.session?.access_token;
+
+      const headers: HeadersInit = {}
+
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      if (isDev) headers['x-forwarded-for'] = '123.456.789.0';
+
+      const res = await fetch('/api/usage', {
+        headers,
+      });
+
+      if (!res.ok) console.error('Failed to fetch usage.');
+      const data = await res.json();
+
+      setGenerationCount(data.usageCount.usageCount);
+      setUsageLimit(data.usageLimit);
+
+      console.log('usageCount', data.usageCount);
+      console.log('usageLimit', data.usageLimit);
+
+      if (isAuthenticated) {
+        const res = await fetch('/api/subscription', {
+          headers,
         });
 
-        if (!res.ok) console.error('Failed to fetch usage.');
-        const data = await res.json();
-        setGenerationCount(data.usageCount);
-        console.log(data.usageCount)
-      } catch (err) {
-        console.error('Failed to fetch generation usage.', err);
+        if (!res.ok) console.error('Failed to fetch subscription/plan details.');
+        const subscriptionData = await res.json();
+        setUsageLimit(subscriptionData.maxUsage);
       }
+    } catch (err) {
+      console.error('Failed to fetch generation usage.', err);
+    }
+  }, [isAuthenticated]);
+
+  useEffect (() => {
+    (async () => {
+      await fetchUsage();
     })();
-  }, [])
+  }, [fetchUsage]);
 
   const handleAcceptTerms = () => {
     if (acceptTerms) {
@@ -118,8 +142,10 @@ export default function Generator() {
       setLoading(false);
       return;
     }
-
-    if (!isAuthenticated && generationCount >= MAX_FREE_GENERATIONS) {
+    console.log('isAuthenticated', isAuthenticated);
+    console.log('generation count:', generationCount);
+    console.log('maxUsage:', usageLimit);
+    if (!isAuthenticated && generationCount >= usageLimit) {
       setShowAuthPrompt(true);
       setLoading(false);
       return;
@@ -129,13 +155,14 @@ export default function Generator() {
       const session = await supabase.auth.getSession();
       const token = session.data.session?.access_token;
 
+      const headers: HeadersInit = {};
+
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      if (isDev) headers['x-forwarded-for'] = '123.456.789.0';
+
       const res = await fetch('/api/generate', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-          'x-forwarded-for': '123.456.789.0',
-        },
+        headers,
         body: JSON.stringify(formData)
       });
 
@@ -164,6 +191,7 @@ export default function Generator() {
         variant: "destructive"
       });
     }
+    await fetchUsage();
     setLoading(false);
   };
 
@@ -201,11 +229,19 @@ export default function Generator() {
             <CardContent className="py-6">
               <div className="flex flex-col md:flex-row items-center justify-between gap-4">
                 <div className="flex-1 w-full">
-                  <h3 className="font-semibold mb-2">
-                    {remainingGenerations > 0
-                      ? `${remainingGenerations} free generations remaining`
-                      : "Free generations limit reached"}
-                  </h3>
+                  {isAuthenticated ?
+                    <h3 className="font-semibold mb-2">
+                      {remainingGenerations > 0
+                        ? `${remainingGenerations} generations remaining`
+                        : "Generation limit reached"}
+                    </h3>
+                  :
+                    <h3 className="font-semibold mb-2">
+                      {remainingGenerations > 0
+                        ? `${remainingGenerations} free generations remaining`
+                        : "Free generations limit reached"}
+                    </h3>
+                  }
                   <Progress value={progressPercentage} className="h-2" />
                 </div>
                 <div className="flex items-center gap-2">
@@ -295,12 +331,11 @@ export default function Generator() {
                   <Button 
                     type="submit" 
                     className="w-full"
-                    disabled={!isAuthenticated && generationCount >= MAX_FREE_GENERATIONS}
                   >
                     Generate Cover Letter
                   </Button>
 
-                  {!isAuthenticated && generationCount >= MAX_FREE_GENERATIONS && (
+                  {!isAuthenticated && generationCount >= usageLimit && (
                     <p className="text-sm text-muted-foreground text-center">
                       You&#39;ve reached the limit for free generations.{' '}
                       <Link href="/signup" className="text-primary hover:underline">

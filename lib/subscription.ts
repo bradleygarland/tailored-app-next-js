@@ -1,17 +1,34 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 
-export async function getUserSubscriptions(
+// usage limit mapping table
+export const PLAN_USAGE_LIMITS: Record<string, number> = {
+  free: 3,
+  starter: 15,
+  pro: Number.MAX_SAFE_INTEGER,
+};
+
+export async function getUserSubscription(
   supabase: SupabaseClient,
-): Promise<any[]> {
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
-  if (authError || !user) throw new Error('Authentication failed');
+  token: string | null
+): Promise<string> {
+  let userId: string | null = null;
 
-  const { data: subscriptions, error: subError } = await supabase
+  if (token) {
+    const {data: {user}, error: authError} = await supabase.auth.getUser(token);
+    if (authError) {
+      console.warn("getUserSubscription: Auth token provided but invalid:", authError.message);
+    } else {
+      userId = user?.id || null;
+    }
+  }
+
+  const { data: subscription, error: subError } = await supabase
     .from('subscriptions')
-    .select('*')
-    .eq('user_id', user.id);
+    .select('plan')
+    .eq('user_id', userId)
+    .single();
 
-  if (subError) throw new Error(`Failed to fetch subscriptions: ${subError.message}`);
+  if (subError || !subscription) throw new Error(`Failed to fetch subscription: ${subError.message}`);
 
-  return subscriptions; // array of subscriptions
+  return subscription.plan || 'free'; // array of subscriptions
 }
