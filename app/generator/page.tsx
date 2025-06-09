@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -44,7 +44,7 @@ export default function Generator() {
 
   const [generatedLetter, setGeneratedLetter] = useState('');
   const [generationCount, setGenerationCount] = useState(0);
-  const [maxUsage, setMaxUsage] = useState(3);
+  const [usageLimit, setUsageLimit] = useState(3);
 
   const [showAuthPrompt, setShowAuthPrompt] = useState(false);
 
@@ -61,8 +61,8 @@ export default function Generator() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const remainingGenerations = maxUsage - generationCount;
-  const progressPercentage = (generationCount / maxUsage) * 100;
+  const remainingGenerations = usageLimit - generationCount;
+  const progressPercentage = (generationCount / usageLimit) * 100;
 
   useEffect(() => {
     if (!hasAcceptedTerms) {
@@ -70,44 +70,50 @@ export default function Generator() {
     }
   }, [hasAcceptedTerms]);
 
-  useEffect (() => {
-    (async () => {
-      try {
 
+  const fetchUsage = useCallback(async () => {
+    try {
+      // supabase.auth.getSession() will only return a session if the user is authenticated
+      const session = await supabase.auth.getSession();
+      const token = session.data.session?.access_token;
 
-        // supabase.auth.getSession() will only return a session if the user is authenticated
-        const session = await supabase.auth.getSession();
-        const token = session.data.session?.access_token;
+      const headers: HeadersInit = {}
 
-        // ip spoofing for development (DELETE before prod)
-        const headers: HeadersInit = {}
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      if (isDev) headers['x-forwarded-for'] = '123.456.789.0';
 
-        if (token) headers['Authorization'] = `Bearer ${token}`;
-        if (isDev) headers['x-forwarded-for'] = '123.456.789.0';
+      const res = await fetch('/api/usage', {
+        headers,
+      });
 
+      if (!res.ok) console.error('Failed to fetch usage.');
+      const data = await res.json();
 
-        const res = await fetch('/api/usage', {
+      setGenerationCount(data.usageCount.usageCount);
+      setUsageLimit(data.usageLimit);
+
+      console.log('usageCount', data.usageCount);
+      console.log('usageLimit', data.usageLimit);
+
+      if (isAuthenticated) {
+        const res = await fetch('/api/subscription', {
           headers,
         });
 
-        if (!res.ok) console.error('Failed to fetch usage.');
-        const data = await res.json();
-        setGenerationCount(data.usageCount);
-
-        if (isAuthenticated) {
-          const res = await fetch('/api/subscription', {
-            headers,
-          });
-
-          if (!res.ok) console.error('Failed to fetch subscription/plan details.');
-          const subscriptionData = await res.json();
-          setMaxUsage(subscriptionData.maxUsage);
-        }
-      } catch (err) {
-        console.error('Failed to fetch generation usage.', err);
+        if (!res.ok) console.error('Failed to fetch subscription/plan details.');
+        const subscriptionData = await res.json();
+        setUsageLimit(subscriptionData.maxUsage);
       }
-    })();
+    } catch (err) {
+      console.error('Failed to fetch generation usage.', err);
+    }
   }, [isAuthenticated]);
+
+  useEffect (() => {
+    (async () => {
+      await fetchUsage();
+    })();
+  }, [fetchUsage]);
 
   const handleAcceptTerms = () => {
     if (acceptTerms) {
@@ -138,8 +144,8 @@ export default function Generator() {
     }
     console.log('isAuthenticated', isAuthenticated);
     console.log('generation count:', generationCount);
-    console.log('maxUsage:', maxUsage);
-    if (!isAuthenticated && generationCount >= maxUsage) {
+    console.log('maxUsage:', usageLimit);
+    if (!isAuthenticated && generationCount >= usageLimit) {
       setShowAuthPrompt(true);
       setLoading(false);
       return;
@@ -185,6 +191,7 @@ export default function Generator() {
         variant: "destructive"
       });
     }
+    await fetchUsage();
     setLoading(false);
   };
 
@@ -328,7 +335,7 @@ export default function Generator() {
                     Generate Cover Letter
                   </Button>
 
-                  {!isAuthenticated && generationCount >= maxUsage && (
+                  {!isAuthenticated && generationCount >= usageLimit && (
                     <p className="text-sm text-muted-foreground text-center">
                       You&#39;ve reached the limit for free generations.{' '}
                       <Link href="/signup" className="text-primary hover:underline">
