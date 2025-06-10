@@ -5,7 +5,7 @@ interface User {
   id: string;
   email: string;
   name?: string;
-  isPremium: boolean;
+  plan: string;
 }
 
 interface AuthState {
@@ -42,11 +42,19 @@ export const useAuth = create<AuthState>((set, get) => ({
 
     if (!profile) throw new Error('No profile found');
 
+    const { data: subscription } = await supabase
+      .from('subscriptions')
+      .select('*')
+      .eq('user_id', user.id)
+      .single();
+
+    if (!subscription) throw new Error('No subscription found');
+
     const userData: User = {
       id: profile.id,
       email: profile.email,
       name: profile.name || undefined,
-      isPremium: profile.is_premium,
+      plan: subscription.plan || 'free',
     };
 
     set({ user: userData, isAuthenticated: true });
@@ -82,11 +90,20 @@ export const useAuth = create<AuthState>((set, get) => ({
     if (updateError) throw updateError;
     if (!updatedProfile) throw new Error('Failed to update profile');
 
+    // Base subscription row created automatically via database trigger
+    const { data: subscription } = await supabase
+      .from('subscriptions')
+      .select('*')
+      .eq('user_id', user.id)
+      .single();
+
+    if (!subscription) throw new Error('register: No user subscription found');
+
     const userData: User = {
       id: updatedProfile.id,
       email: updatedProfile.email,
       name: updatedProfile.name || undefined,
-      isPremium: updatedProfile.is_premium,
+      plan: subscription.plan || 'free'
     };
 
     set({ user: userData, isAuthenticated: true });
@@ -138,9 +155,17 @@ export const useAuth = create<AuthState>((set, get) => ({
     if (error) throw error;
     if (!updatedProfile) throw new Error('Failed to upgrade account');
 
+    /*
+    * Upgrade subscription:
+    *   Must remove old subscription
+    *   Add new subscription
+    *   Add check for single subscription
+    *   Add check for valid subscription
+    */
+
     const userData: User = {
       ...user,
-      isPremium: true,
+      plan: 'free',
     };
 
     set({ user: userData });
@@ -163,7 +188,7 @@ export const useAuth = create<AuthState>((set, get) => ({
 
     const userData: User = {
       ...user,
-      isPremium: false,
+      plan: 'free',
     };
 
     set({ user: userData });
@@ -189,7 +214,7 @@ supabase.auth.onAuthStateChange((event, session) => {
             id: profile.id,
             email: profile.email,
             name: profile.name || undefined,
-            isPremium: profile.is_premium,
+            plan: 'free', // DEV const given to plan (change later)
           };
           useAuth.setState({ user: userData, isAuthenticated: true, initialized: true });
         } else {

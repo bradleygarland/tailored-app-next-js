@@ -69,7 +69,6 @@ export async function updateUserOrAnonUsage(
 ): Promise<void> {
   let userId: string | null = null;
 
-  console.log(`Updating user or anon usage to ${newCount}`);
   if (token) {
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
     if (authError) {

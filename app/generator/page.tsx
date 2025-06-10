@@ -244,6 +244,7 @@ export default function Generator() {
                   }
                   <Progress value={progressPercentage} className="h-2" />
                 </div>
+                {!isAuthenticated ? (
                 <div className="flex items-center gap-2">
                   <Link href="/login">
                     <Button variant="outline">Log in</Button>
@@ -252,6 +253,13 @@ export default function Generator() {
                     <Button>Sign up for unlimited access</Button>
                   </Link>
                 </div>
+                  ) : (
+                  <div className="flex items-center gap-2">
+                    <Link href="/signup">
+                      <Button>Upgrade</Button>
+                    </Link>
+                  </div>
+                  )}
               </div>
             </CardContent>
           </Card>

@@ -10,8 +10,6 @@ const supabase = createClient(
 );
 
 export async function GET(req: NextRequest) {
-  console.log('GET subscription route');
-
   const token = req.headers.get('authorization')?.split(' ')[1] || '';
 
   try {

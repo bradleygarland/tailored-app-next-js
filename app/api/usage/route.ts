@@ -15,9 +15,6 @@ export async function GET(req: NextRequest) {
     const token = req.headers.get('authorization')?.split(' ')[1] || null;
     const ip = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || req.headers.get('cf-connecting-ip') || req.ip || 'unknown';
 
-    // Console log IP on GET
-    console.log('GET', ip);
-
     if (!token && !ip) {
       return NextResponse.json({ error: 'Missing auth token and IP address' }, { status: 400 });
     }
@@ -30,8 +27,6 @@ export async function GET(req: NextRequest) {
       usageLimit = PLAN_USAGE_LIMITS[plan] ?? 3;
     }
 
-    console.log('usage', usageCount);
-    console.log('usageLimit', usageLimit);
     return NextResponse.json({
       usageCount,
       usageLimit,

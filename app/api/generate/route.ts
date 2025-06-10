@@ -6,8 +6,10 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import { createClient } from '@supabase/supabase-js';
+import { encoding_for_model } from 'tiktoken';
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const enc = encoding_for_model('gpt-4o-mini');
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -30,13 +32,8 @@ export async function POST(req: NextRequest) {
     const plan = await getUserSubscription(supabase, token);
     const maxGenerations = PLAN_USAGE_LIMITS[plan] ?? 0;
 
-    // Console log IP on POST
-    console.log('POST', ip);
-
     const usageData = await getUserOrAnonUsage(supabase, token, ip);
     const usageCount = usageData.usageCount;
-
-    console.log('usage', usageCount);
 
     // Check limit
     // TEST_MAX_GENERATIONS DEV VAR
@@ -46,22 +43,7 @@ export async function POST(req: NextRequest) {
       }, { status: 403 });
     }
 
-    /* Update or insert usage
-    if (usage) {
-      await supabase.from('generation_usage').update({
-        count: usage.count + 1,
-        last_generated_at: new Date(),
-      }).eq(userId ? 'user_id' : 'ip_address', userId || ip);
-    } else {
-      await supabase.from('generation_usage').insert([{
-        user_id: userId,
-        ip_address: userId ? null : ip,
-        count: 1,
-        last_generated_at: new Date(),
-      }]);
-    }*/
-
-    const prompt = "Give me a singular short sentence about the date.";
+    const prompt = `Give me a crazy fact about today's date. Make the description extremely short. Today is ${new Date()}`;
 
     /*const prompt = `
       Write a professional cover letter for the following job application:
@@ -74,6 +56,16 @@ export async function POST(req: NextRequest) {
 
       The tone should be confident, engaging, and professional. Keep it concise and focused on why the applicant is a good fit for the role.
     `;*/
+
+    const tokens = enc.encode(prompt);
+    const tokenCount = tokens.length;
+    enc.free();
+    console.log("tokens:", tokenCount);
+
+    if (tokenCount > 2048) {
+      console.warn(`Prompt exceeds max token limit (2048): ${tokenCount}`);
+      return NextResponse.json({ error: `Prompt exceeds max token limit (2048): ${tokenCount}` }, { status: 400 });
+    }
 
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
