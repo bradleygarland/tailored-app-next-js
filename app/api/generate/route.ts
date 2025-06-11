@@ -26,6 +26,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
+    console.log(`
+    fullName: ${fullName},
+    email: ${email},
+    phone: ${phone},
+    company: ${company},
+    position: ${position},
+    jobDescription: ${jobDescription}
+    `)
+
     const ip = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || req.headers.get('cf-connecting-ip') || req.ip || 'unknown';
 
     // Get Max Generations from subscription
@@ -43,9 +52,9 @@ export async function POST(req: NextRequest) {
       }, { status: 403 });
     }
 
-    const prompt = `Give me a crazy fact about today's date. Make the description extremely short. Today is ${new Date()}`;
+    //const prompt = `Give me a crazy fact about today's date. Make the description extremely short. Today is ${new Date()}`;
 
-    /*const prompt = `
+    const prompt = `
       Write a professional cover letter for the following job application:
       - Full Name: ${fullName}
       - Email: ${email}
@@ -53,18 +62,20 @@ export async function POST(req: NextRequest) {
       - Company: ${company}
       - Position: ${position}
       - Job Description: ${jobDescription}
+      - Date: ${new Date()}
 
       The tone should be confident, engaging, and professional. Keep it concise and focused on why the applicant is a good fit for the role.
-    `;*/
+      Make sure that the cover letter is ready to be copied and pasted without any placeholder effects. If no information is given for certain parts, do not include it.
+    `;
 
-    const tokens = enc.encode(prompt);
-    const tokenCount = tokens.length;
-    enc.free();
-    console.log("tokens:", tokenCount);
+    const inputTokens = enc.encode(prompt);
+    const inputTokenCount = inputTokens.length;
+    //enc.free();
+    console.log("input tokens:", inputTokenCount);
 
-    if (tokenCount > 2048) {
-      console.warn(`Prompt exceeds max token limit (2048): ${tokenCount}`);
-      return NextResponse.json({ error: `Prompt exceeds max token limit (2048): ${tokenCount}` }, { status: 400 });
+    if (inputTokenCount > 2048) {
+      console.warn(`Prompt exceeds max token limit (2048): ${inputTokenCount}`);
+      return NextResponse.json({ error: `Prompt exceeds max token limit (2048): ${inputTokenCount}` }, { status: 400 });
     }
 
     const completion = await openai.chat.completions.create({
@@ -73,6 +84,14 @@ export async function POST(req: NextRequest) {
     });
 
     const generatedLetter = completion.choices[0]?.message?.content?.trim();
+    console.log(generatedLetter);
+
+    if (generatedLetter) {
+      const outputTokens = enc.encode(generatedLetter);
+      const outputTokenCount = outputTokens.length;
+      enc.free();
+      console.log("output tokens:", outputTokenCount);
+    }
 
     // Update usage after generation
     const newCount = usageCount + 1;
