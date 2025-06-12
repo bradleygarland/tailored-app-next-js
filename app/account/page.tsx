@@ -37,10 +37,8 @@ export default function Account() {
   const { toast } = useToast();
   const router = useRouter();
   const [profileData, setProfileData] = useState({
-    fullName: '',
+    full_name: '',
     email: '',
-    company: '',
-    position: '',
     phone: '',
     bio: '',
     website: '',
@@ -71,34 +69,24 @@ export default function Account() {
     const fetchUserInfo = async () => {
       if (!user) return;
 
-      const { data, error } = await supabase
-        .from('user_info')
-        .select('*')
-        .eq('id', user.id)
-        .single();
+      const session = await supabase.auth.getSession();
+      const token = session.data.session?.access_token;
 
-      if (error) {
-        console.error('Error fetching user info:', error);
-        return;
-      }
+      const headers: HeadersInit = {};
 
-      if (data) {
-        setProfileData({
-          fullName: data.name || '',
-          email: data.email || '',
-          company: data.company || '',
-          position: data.position || '',
-          phone: data.phone || '',
-          bio: data.bio || '',
-          website: data.website || '',
-          location: data.location || '',
-          timezone: data.timezone || '',
-          language: data.language || '',
-          linkedin: data.linkedin || '',
-          github: data.github || '',
-          twitter: data.twitter || ''
-        });
-      }
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const res = await fetch('/api/profile/get', {
+        headers,
+      });
+
+      const data = await res.json()
+
+      if (!res.ok) console.log(data.error);
+
+      setProfileData(data.data);
+
+      // END HERE
     };
 
     const fetchSubscription = async () => {
@@ -148,8 +136,6 @@ export default function Account() {
 
       if (!res.ok) console.log(data.error);
 
-      console.log(data.data);
-
       setAutofillData(data.data);
     })();
   }, []);
@@ -160,38 +146,39 @@ export default function Account() {
 
     setIsLoading(true);
     try {
-      const { error } = await supabase
-        .from('user_info')
-        .update({
-          name: profileData.fullName,
-          email: profileData.email,
-          company: profileData.company,
-          position: profileData.position,
-          phone: profileData.phone,
-          bio: profileData.bio,
-          website: profileData.website,
-          location: profileData.location,
-          timezone: profileData.timezone,
-          language: profileData.language,
-          linkedin: profileData.linkedin,
-          github: profileData.github,
-          twitter: profileData.twitter
+      const session = await supabase.auth.getSession();
+      const token = session.data.session?.access_token;
+
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      };
+
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const res = await fetch('/api/profile/update', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          full_name: profileData.full_name || '',
+          email: profileData.email || '',
+          phone: profileData.phone || '',
+          location: profileData.location || '',
+          timezone: profileData.timezone || '',
+          language: profileData.language || '',
+          bio: profileData.bio || '',
+          website: profileData.website || '',
+          linkedin: profileData.linkedin || '',
+          github: profileData.github || '',
+          twitter: profileData.twitter || '',
         })
-        .eq('id', user.id);
+      })
 
-      if (error) throw error;
+      const data = await res.json()
 
-      toast({
-        title: "Profile updated",
-        description: "Your profile has been updated successfully."
-      });
+      if (!res.ok) console.error('Failed to update profile:', data.error);
+
     } catch (error) {
       console.error('Error updating profile:', error);
-      toast({
-        title: "Error updating profile",
-        description: "There was an error updating your profile. Please try again.",
-        variant: "destructive"
-      });
     } finally {
       setIsLoading(false);
     }
@@ -201,16 +188,16 @@ export default function Account() {
     e.preventDefault();
 
     try {
-        console.log("autofillData:", autofillData);
+      console.log("autofillData:", autofillData);
 
-        const session = await supabase.auth.getSession();
-        const token = session.data.session?.access_token;
+      const session = await supabase.auth.getSession();
+      const token = session.data.session?.access_token;
 
-        const headers: HeadersInit = {
-          'Content-Type': 'application/json',
-        };
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      };
 
-        if (token) headers['Authorization'] = `Bearer ${token}`;
+      if (token) headers['Authorization'] = `Bearer ${token}`;
 
       const res = await fetch('/api/autofill/update', {
         method: 'POST',
@@ -265,11 +252,11 @@ export default function Account() {
                   <form onSubmit={handleProfileUpdate} className="space-y-4">
                     <div className="grid md:grid-cols-2 gap-4">
                       <div>
-                        <Label htmlFor="fullName">Full Name</Label>
+                        <Label htmlFor="full_name">Full Name</Label>
                         <Input
-                          id="fullName"
-                          value={profileData.fullName}
-                          onChange={(e) => setProfileData({ ...profileData, fullName: e.target.value })}
+                          id="full_name"
+                          value={profileData.full_name}
+                          onChange={(e) => setProfileData({ ...profileData, full_name: e.target.value })}
                           disabled={isLoading}
                         />
                       </div>

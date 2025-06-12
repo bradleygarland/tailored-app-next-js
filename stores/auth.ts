@@ -198,9 +198,6 @@ export const useAuth = create<AuthState>((set, get) => ({
 
 // Initialize auth state
 supabase.auth.onAuthStateChange((event, session) => {
-  // DEV CONSOLE log event & session
-  console.log('event', event);
-  console.log('session', session);
   if (event === 'SIGNED_IN' && session?.user) {
     // Fetch user profile
     supabase
