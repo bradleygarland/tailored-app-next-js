@@ -20,20 +20,11 @@ export async function POST(req: NextRequest) {
   try {
     const token = req.headers.get('authorization')?.split(' ')[1] || '';
 
-    const { fullName, email, phone, company, position, jobDescription } = await req.json();
+    const { full_name, email, phone, address, city, state, zip_code, skills, company, position, jobDescription } = await req.json();
 
-    if (!fullName || !email || !phone || !company || !position || !jobDescription) {
+    if (!full_name || !email || !phone || !company || !position || !jobDescription) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
-
-    console.log(`
-    fullName: ${fullName},
-    email: ${email},
-    phone: ${phone},
-    company: ${company},
-    position: ${position},
-    jobDescription: ${jobDescription}
-    `)
 
     const ip = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || req.headers.get('cf-connecting-ip') || req.ip || 'unknown';
 
@@ -56,15 +47,20 @@ export async function POST(req: NextRequest) {
 
     const prompt = `
       Write a professional cover letter for the following job application:
-      - Full Name: ${fullName}
+      - Full Name: ${full_name}
       - Email: ${email}
       - Phone: ${phone}
+      - Address: ${address}
+      - City: ${city}
+      - State: ${state}
+      - Zip: ${zip_code}
+      - Skills: ${skills}
       - Company: ${company}
       - Position: ${position}
       - Job Description: ${jobDescription}
       - Date: ${new Date()}
 
-      The tone should be confident, engaging, and professional. Keep it concise and focused on why the applicant is a good fit for the role.
+      The tone should be confident, engaging, and professional. Keep it concise and focused on why the applicant is a good fit for the role. Maintain honesty and integrity based on the skills provided. Focus on appealing to the recipient's sense of honor and attempt to convince them to look into an interview or further opportunities.
       Make sure that the cover letter is ready to be copied and pasted without any placeholder effects. If no information is given for certain parts, do not include it.
     `;
 

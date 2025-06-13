@@ -34,9 +34,14 @@ export default function Generator() {
   const { toast } = useToast();
 
   const [formData, setFormData] = useState({
-    fullName: '',
+    full_name: '',
     email: '',
     phone: '',
+    address: '',
+    city: '',
+    state: '',
+    zip_code: '',
+    skills: '',
     company: '',
     position: '',
     jobDescription: ''
@@ -69,6 +74,27 @@ export default function Generator() {
       setShowTermsDialog(true);
     }
   }, [hasAcceptedTerms]);
+
+  useEffect(() => {
+    (async () => {
+      const session = await supabase.auth.getSession();
+      const token = session.data.session?.access_token;
+
+      const headers: HeadersInit = {};
+
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const res = await fetch('/api/autofill/get', {
+        headers,
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) console.log(data.error);
+
+      setFormData(data.data);
+    })();
+  }, []);
 
 
   const fetchUsage = useCallback(async () => {
@@ -264,20 +290,23 @@ export default function Generator() {
             </CardContent>
           </Card>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-[30%_70%] gap-3">
             {/* Left side - Form */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-2xl">Cover Letter Generator</CardTitle>
+                <CardTitle className="text-2xl">Generator</CardTitle>
               </CardHeader>
               <CardContent>
+                <div className="text-lg border-b-2">Personal Information</div>
+
                 <form onSubmit={handleSubmit} className="space-y-4">
+                  {/* Personal Information Section*/}
                   <div>
-                    <Label htmlFor="fullName">Full Name</Label>
+                    <Label htmlFor="full_name">Full Name</Label>
                     <Input
-                      id="fullName"
-                      value={formData.fullName}
-                      onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
+                      id="full_name"
+                      value={formData.full_name}
+                      onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
                       required
                     />
                   </div>
@@ -301,6 +330,51 @@ export default function Generator() {
                       value={formData.phone}
                       onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                       required
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="address">Address</Label>
+                    <Input
+                      id="address"
+                      value={formData.address}
+                      onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="city">City</Label>
+                    <Input
+                      id="city"
+                      value={formData.city}
+                      onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="state">State</Label>
+                    <Input
+                      id="state"
+                      value={formData.state}
+                      onChange={(e) => setFormData({ ...formData, state: e.target.value })}
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="zip_code">ZIP Code</Label>
+                    <Input
+                      id="zip_code"
+                      value={formData.zip_code}
+                      onChange={(e) => setFormData({ ...formData, zip_code: e.target.value })}
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="skills">Skills</Label>
+                    <Textarea
+                      id="skills"
+                      value={formData.skills}
+                      onChange={(e) => setFormData({ ...formData, skills: e.target.value })}
                     />
                   </div>
 
