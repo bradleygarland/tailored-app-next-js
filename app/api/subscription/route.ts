@@ -14,11 +14,15 @@ export async function GET(req: NextRequest) {
 
   try {
 
-    const plan = await getUserSubscription(supabase, token);
+    const subscription = await getUserSubscription(supabase, token);
+    /*
+    const plan = subscription.plan || 'free';
 
     const maxUsage = PLAN_USAGE_LIMITS[plan] ?? 0; // default to 0 if unknown
+    */
 
-    return NextResponse.json({ status: 200, plan, maxUsage });
+
+    return NextResponse.json({ status: 200, data: subscription });
   } catch (err) {
     return NextResponse.json({ error: `Error fetching subscription details` }, { status: 500 });
   }
