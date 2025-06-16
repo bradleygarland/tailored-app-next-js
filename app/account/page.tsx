@@ -77,6 +77,8 @@ export default function Account() {
     skills: '',
   });
 
+  const [refreshKey, setRefreshKey] = useState(0);
+
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingSubscription, setIsLoadingSubscription] = useState(true);
 
@@ -104,12 +106,33 @@ export default function Account() {
     })
 
     const data = await res.json();
+    console.log('CANCEL DATA:', data);
 
-    if (data.success) console.log('Subscription cancelled');
+    if (data.success) {
+      console.log('Subscription cancelled successfully');
+      setRefreshKey(prev => prev + 1);
+    }
+
 
     setShowCancelConfirmation(false);
-    // Here you would typically make an API call to cancel the subscription
   };
+
+  const handleResumeSubscription = async () => {
+    const res = await fetch('/api/stripe/resume-subscription', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId: user?.id,
+      })
+    })
+
+    const data = await res.json();
+
+    if (data.success) {
+      console.log('Subscription resumed successfully');
+      setRefreshKey(prev => prev + 1);
+    }
+  }
 
   const getPlanIcon = (planId: string) => {
     switch (planId) {
@@ -185,7 +208,7 @@ export default function Account() {
 
     fetchUserInfo();
     fetchSubscription();
-  }, [user]);
+  }, [user, refreshKey]);
 
   useEffect(() => {
     (async () => {
@@ -510,12 +533,21 @@ export default function Account() {
                           >
                             Upgrade Plan
                           </button>
+                          {currentSubscription.status === 'active' ? (
                           <button
                             onClick={() => setShowCancelConfirmation(true)}
                             className="px-6 py-3 bg-gradient-to-r from-red-500 to-red-600 text-white font-semibold rounded-lg hover:shadow-lg hover:shadow-red-500/25 transition-all duration-300 hover:scale-105"
                           >
                             Cancel Subscription
                           </button>
+                          ) : (
+                            <button
+                              onClick={handleResumeSubscription}
+                              className="px-6 py-3 bg-gradient-to-br from-green-400 to-green-600 text-white font-semibold rounded-lg hover:shadow-lg hover:shadow-red-500/25 transition-all duration-300 hover:scale-105"
+                            >
+                              Resume Subscription
+                            </button>
+                          )}
                         </div>
                       </div>
 
