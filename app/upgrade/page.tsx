@@ -1,21 +1,22 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { CheckCircle } from 'lucide-react';
-import Link from 'next/link';
 import Navbar from '@/components/Navbar';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/stores/auth';
+import { supabase } from '@/lib/supabase';
 
 export default function Upgrade() {
   const [isAnnual, setIsAnnual] = useState(false);
   const [promoCode, setPromoCode] = useState('');
   const [isApplyingPromo, setIsApplyingPromo] = useState(false);
+  const [currentPlan, setCurrentPlan] = useState('free');
   const { toast } = useToast();
   const { user } = useAuth();
 
@@ -68,6 +69,26 @@ export default function Upgrade() {
     }
   };
 
+  useEffect(() => {
+    (async () => {
+      if (!user) return;
+
+      const { data: subscription, error: subError } = await supabase
+        .from('subscriptions')
+        .select('plan, interval')
+        .eq('user_id', user?.id)
+        .single();
+
+      if (subError) {
+        console.error('Error fetching subscription:', subError);
+        setCurrentPlan('free');
+        return;
+      }
+
+      setCurrentPlan(`${subscription?.plan}_${subscription?.interval}`);
+    })();
+  }, [user])
+
   return (
     <>
       <Navbar />
@@ -95,18 +116,42 @@ export default function Upgrade() {
                 <div className="text-3xl font-bold mb-4">
                   ${calculatePrice(5)}{isAnnual ? '/year' : '/month'}
                 </div>
-                <ul className="space-y-2 mb-6">
+                <ul className="space-y-2 mb-14">
                   <li className="flex items-center gap-2">
                     <CheckCircle className="h-5 w-5 text-green-500" />
-                    5 cover letters per month
+                    15 cover letters per month
                   </li>
                   <li className="flex items-center gap-2">
                     <CheckCircle className="h-5 w-5 text-green-500" />
                     Basic templates
                   </li>
                 </ul>
-                <Button className="w-full" onClick={isAnnual ? () => handleCheckout('starter', 'yearly') : () => handleCheckout('starter', 'monthly')}>Select Starter</Button>
-              </CardContent>
+                {isAnnual ? (
+                  currentPlan === 'starter_yearly' ? (
+                    <Button className="w-full bg-muted text-muted-foreground" disabled>
+                      Current
+                    </Button>
+                  ) : (
+                    <Button
+                      className="w-full"
+                      onClick={() => handleCheckout('starter', 'yearly')}
+                    >
+                      Select Starter
+                    </Button>
+                )) : (
+                  currentPlan === 'starter_monthly' ? (
+                    <Button className="w-full bg-muted text-muted-foreground" disabled>
+                      Current
+                    </Button>
+                  ) : (
+                    <Button
+                      className="w-full"
+                      onClick={() => handleCheckout('starter', 'monthly')}
+                    >
+                      Select Starter
+                    </Button>
+                ))}
+                </CardContent>
             </Card>
 
             <Card className="border-primary">
@@ -132,7 +177,31 @@ export default function Upgrade() {
                     AI optimization
                   </li>
                 </ul>
-                <Button className="w-full" variant="default" onClick={isAnnual ? () => handleCheckout('pro', 'yearly') : () => handleCheckout('pro', 'monthly')}>Select Pro</Button>
+                {isAnnual ? (
+                  currentPlan === 'pro_yearly' ? (
+                    <Button className="w-full bg-muted text-muted-foreground" disabled>
+                      Current
+                    </Button>
+                  ) : (
+                    <Button
+                      className="w-full"
+                      onClick={() => handleCheckout('pro', 'yearly')}
+                    >
+                      Select Pro
+                    </Button>
+                  )) : (
+                  currentPlan === 'pro_yearly' ? (
+                    <Button className="w-full bg-muted text-muted-foreground" disabled>
+                      Current
+                    </Button>
+                  ) : (
+                    <Button
+                      className="w-full"
+                      onClick={() => handleCheckout('pro', 'monthly')}
+                    >
+                      Select Pro
+                    </Button>
+                  ))}
               </CardContent>
             </Card>
 

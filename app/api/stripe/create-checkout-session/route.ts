@@ -5,7 +5,7 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string);
 
 const PRICE_IDS: Record<string, string> = {
   'starter_monthly': 'price_1RadgLRv6X6vj8ksgKDNGpZl',
-  'pro_monthly': 'price_1RaMVxRv6X6vj8ks5Q0ccN3E',
+  'pro_monthly': 'price_1RafLSRv6X6vj8ksza3UN1zH',
   'starter_yearly': 'price_1RaMlIRv6X6vj8ksSwd0XR45',
   'pro_yearly': 'price_1RaMlyRv6X6vj8ksrJoHeMx2',
 };
