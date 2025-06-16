@@ -94,8 +94,20 @@ export default function Account() {
     });
   };
 
-  const handleCancelSubscription = () => {
-    console.log('Subscription cancelled');
+  const handleCancelSubscription = async () => {
+    const res = await fetch('/api/stripe/cancel-subscription', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId: user?.id,
+      })
+    })
+
+    const data = await res.json();
+
+    if (data.success) console.log('Subscription cancelled');
+
+    setShowCancelConfirmation(false);
     // Here you would typically make an API call to cancel the subscription
   };
 

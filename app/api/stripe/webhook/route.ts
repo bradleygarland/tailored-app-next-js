@@ -71,13 +71,12 @@ export async function POST(request: NextRequest) {
       {/* Invoice Paid */}
 
       const invoice = event.data.object as Stripe.Invoice;
-      //console.log('Invoice', invoice);
+      console.log('Invoice', invoice);
       return NextResponse.json({ received: true });
     }
     case 'customer.subscription.created': {
       {/* Customer Subscription Created */}
       const subscription = event.data.object as Stripe.Subscription;
-      console.log('Subscription:', subscription);
 
       const stripeCustomerId = subscription.customer as string;
 
@@ -115,6 +114,23 @@ export async function POST(request: NextRequest) {
 
       if  (subError) {
         console.error('Failed to upsert subscription:', subError);
+      }
+
+      return NextResponse.json({ received: true });
+    }
+    case 'customer.subscription.deleted': {
+      const subscription = event.data.object;
+
+      console.log('Subscription:', subscription);
+
+      const { error: updateError } = await supabase
+        .from('subscriptions')
+        .update({ plan: 'free', stripe_subscription_id: null })
+        .eq('stripe_customer_id', subscription?.customer as string)
+        .single();
+
+      if (updateError) {
+        console.error('Failed to update user subscription on delete:', updateError);
       }
 
       return NextResponse.json({ received: true });
