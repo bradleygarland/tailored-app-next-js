@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -37,10 +37,8 @@ export default function Account() {
   const { toast } = useToast();
   const router = useRouter();
   const [profileData, setProfileData] = useState({
-    fullName: '',
+    full_name: '',
     email: '',
-    company: '',
-    position: '',
     phone: '',
     bio: '',
     website: '',
@@ -51,6 +49,18 @@ export default function Account() {
     github: '',
     twitter: ''
   });
+
+  const [autofillData, setAutofillData] = useState({
+    full_name: '',
+    email: '',
+    phone: '',
+    address: '',
+    city: '',
+    state: '',
+    zip_code: '',
+    skills: '',
+  });
+
   const [isLoading, setIsLoading] = useState(false);
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [isLoadingSubscription, setIsLoadingSubscription] = useState(true);
@@ -59,34 +69,24 @@ export default function Account() {
     const fetchUserInfo = async () => {
       if (!user) return;
 
-      const { data, error } = await supabase
-        .from('user_info')
-        .select('*')
-        .eq('id', user.id)
-        .single();
+      const session = await supabase.auth.getSession();
+      const token = session.data.session?.access_token;
 
-      if (error) {
-        console.error('Error fetching user info:', error);
-        return;
-      }
+      const headers: HeadersInit = {};
 
-      if (data) {
-        setProfileData({
-          fullName: data.name || '',
-          email: data.email || '',
-          company: data.company || '',
-          position: data.position || '',
-          phone: data.phone || '',
-          bio: data.bio || '',
-          website: data.website || '',
-          location: data.location || '',
-          timezone: data.timezone || '',
-          language: data.language || '',
-          linkedin: data.linkedin || '',
-          github: data.github || '',
-          twitter: data.twitter || ''
-        });
-      }
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const res = await fetch('/api/profile/get', {
+        headers,
+      });
+
+      const data = await res.json()
+
+      if (!res.ok) console.log(data.error);
+
+      setProfileData(data.data);
+
+      // END HERE
     };
 
     const fetchSubscription = async () => {
@@ -119,44 +119,109 @@ export default function Account() {
     fetchSubscription();
   }, [user]);
 
+  useEffect(() => {
+    (async () => {
+      const session = await supabase.auth.getSession();
+      const token = session.data.session?.access_token;
+
+      const headers: HeadersInit = {};
+
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const res = await fetch('/api/autofill/get', {
+        headers,
+      });
+
+      const data = await res.json()
+
+      if (!res.ok) console.log(data.error);
+
+      setAutofillData(data.data);
+    })();
+  }, []);
+
   const handleProfileUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
 
     setIsLoading(true);
     try {
-      const { error } = await supabase
-        .from('user_info')
-        .update({
-          name: profileData.fullName,
-          email: profileData.email,
-          company: profileData.company,
-          position: profileData.position,
-          phone: profileData.phone,
-          bio: profileData.bio,
-          website: profileData.website,
-          location: profileData.location,
-          timezone: profileData.timezone,
-          language: profileData.language,
-          linkedin: profileData.linkedin,
-          github: profileData.github,
-          twitter: profileData.twitter
+      const session = await supabase.auth.getSession();
+      const token = session.data.session?.access_token;
+
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      };
+
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const res = await fetch('/api/profile/update', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          full_name: profileData.full_name || '',
+          email: profileData.email || '',
+          phone: profileData.phone || '',
+          location: profileData.location || '',
+          timezone: profileData.timezone || '',
+          language: profileData.language || '',
+          bio: profileData.bio || '',
+          website: profileData.website || '',
+          linkedin: profileData.linkedin || '',
+          github: profileData.github || '',
+          twitter: profileData.twitter || '',
         })
-        .eq('id', user.id);
+      })
 
-      if (error) throw error;
+      const data = await res.json()
 
-      toast({
-        title: "Profile updated",
-        description: "Your profile has been updated successfully."
-      });
+      if (!res.ok) console.error('Failed to update profile:', data.error);
+
     } catch (error) {
       console.error('Error updating profile:', error);
-      toast({
-        title: "Error updating profile",
-        description: "There was an error updating your profile. Please try again.",
-        variant: "destructive"
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleAutofillUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    try {
+      console.log("autofillData:", autofillData);
+
+      const session = await supabase.auth.getSession();
+      const token = session.data.session?.access_token;
+
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      };
+
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const res = await fetch('/api/autofill/update', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          full_name: autofillData.full_name || '',
+          email: autofillData.email || '',
+          phone: autofillData.phone || '',
+          address: autofillData.address || '',
+          city: autofillData.city || '',
+          state: autofillData.state || '',
+          zip_code: autofillData.zip_code || '',
+          skills: autofillData.skills || '',
+        }),
       });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        console.warn("Failed to update autofill data:", data.error);
+      }
+
+    } catch (error) {
+      console.error('account/page fetch error:', error);
     } finally {
       setIsLoading(false);
     }
@@ -187,11 +252,11 @@ export default function Account() {
                   <form onSubmit={handleProfileUpdate} className="space-y-4">
                     <div className="grid md:grid-cols-2 gap-4">
                       <div>
-                        <Label htmlFor="fullName">Full Name</Label>
+                        <Label htmlFor="full_name">Full Name</Label>
                         <Input
-                          id="fullName"
-                          value={profileData.fullName}
-                          onChange={(e) => setProfileData({ ...profileData, fullName: e.target.value })}
+                          id="full_name"
+                          value={profileData.full_name}
+                          onChange={(e) => setProfileData({ ...profileData, full_name: e.target.value })}
                           disabled={isLoading}
                         />
                       </div>
@@ -321,7 +386,7 @@ export default function Account() {
                       <CreditCard className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                       <p className="text-lg font-medium">No payment methods</p>
                       <p className="text-muted-foreground mb-4">
-                        You haven't added any payment methods yet
+                        You haven&#39;t added any payment methods yet
                       </p>
                       <Link href="/account/payment-method">
                         <Button>Add Payment Method</Button>
@@ -403,13 +468,13 @@ export default function Account() {
                   <CardDescription>This information will be used to automatically fill in forms when generating cover letters.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <form onSubmit={handleProfileUpdate} className="space-y-4">
+                  <form onSubmit={handleAutofillUpdate} className="space-y-4">
                     <div>
                       <Label htmlFor="fullName">Full Name</Label>
                       <Input
                         id="fullName"
-                        value={profileData.fullName}
-                        onChange={(e) => setProfileData({ ...profileData, fullName: e.target.value })}
+                        value={autofillData.full_name}
+                        onChange={(e) => setAutofillData({ ...autofillData, full_name: e.target.value })}
                         disabled={isLoading}
                       />
                     </div>
@@ -419,8 +484,8 @@ export default function Account() {
                       <Input
                         id="email"
                         type="email"
-                        value={profileData.email}
-                        onChange={(e) => setProfileData({ ...profileData, email: e.target.value })}
+                        value={autofillData.email}
+                        onChange={(e) => setAutofillData({ ...autofillData, email: e.target.value })}
                         disabled={isLoading}
                       />
                     </div>
@@ -429,28 +494,58 @@ export default function Account() {
                       <Label htmlFor="phone">Phone</Label>
                       <Input
                         id="phone"
-                        value={profileData.phone}
-                        onChange={(e) => setProfileData({ ...profileData, phone: e.target.value })}
+                        value={autofillData.phone}
+                        onChange={(e) => setAutofillData({ ...autofillData, phone: e.target.value })}
                         disabled={isLoading}
                       />
                     </div>
 
                     <div>
-                      <Label htmlFor="company">Company</Label>
+                      <Label htmlFor="address">Address</Label>
                       <Input
-                        id="company"
-                        value={profileData.company}
-                        onChange={(e) => setProfileData({ ...profileData, company: e.target.value })}
+                        id="address"
+                        value={autofillData.address}
+                        onChange={(e) => setAutofillData({ ...autofillData, address: e.target.value })}
                         disabled={isLoading}
                       />
                     </div>
 
                     <div>
-                      <Label htmlFor="position">Position</Label>
+                      <Label htmlFor="city">City</Label>
                       <Input
-                        id="position"
-                        value={profileData.position}
-                        onChange={(e) => setProfileData({ ...profileData, position: e.target.value })}
+                        id="city"
+                        value={autofillData.city}
+                        onChange={(e) => setAutofillData({ ...autofillData, city: e.target.value })}
+                        disabled={isLoading}
+                      />
+                    </div>
+
+                    <div>
+                      <Label htmlFor="state">State</Label>
+                      <Input
+                        id="state"
+                        value={autofillData.state}
+                        onChange={(e) => setAutofillData({ ...autofillData, state: e.target.value })}
+                        disabled={isLoading}
+                      />
+                    </div>
+
+                    <div>
+                      <Label htmlFor="zip_code">Zip Code</Label>
+                      <Input
+                        id="zip_code"
+                        value={autofillData.zip_code}
+                        onChange={(e) => setAutofillData({ ...autofillData, zip_code: e.target.value })}
+                        disabled={isLoading}
+                      />
+                    </div>
+
+                    <div>
+                      <Label htmlFor="skills">Skills</Label>
+                      <Input
+                        id="skills"
+                        value={autofillData.skills}
+                        onChange={(e) => setAutofillData({ ...autofillData, skills: e.target.value })}
                         disabled={isLoading}
                       />
                     </div>

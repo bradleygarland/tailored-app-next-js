@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -22,47 +22,124 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/stores/auth';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/lib/supabase'
 
 const PLACEHOLDER_TEXT = "Your generated cover letter will appear here. Once generated, you can edit it directly in this editor.";
-const MAX_FREE_GENERATIONS = 3;
+
+const isDev = process.env.NODE_ENV === 'development';
 
 export default function Generator() {
   const router = useRouter();
-  const { isLoggedIn } = useAuth();
+  const { isAuthenticated } = useAuth();
   const { toast } = useToast();
+
   const [formData, setFormData] = useState({
-    fullName: '',
+    full_name: '',
     email: '',
     phone: '',
+    address: '',
+    city: '',
+    state: '',
+    zip_code: '',
+    skills: '',
     company: '',
     position: '',
     jobDescription: ''
   });
+
   const [generatedLetter, setGeneratedLetter] = useState('');
-  const [generationCount, setGenerationCount] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return parseInt(localStorage.getItem('generationCount') || '0', 10);
-    }
-    return 0;
-  });
+  const [generationCount, setGenerationCount] = useState(0);
+  const [usageLimit, setUsageLimit] = useState(3);
+
   const [showAuthPrompt, setShowAuthPrompt] = useState(false);
+
   const [hasAcceptedTerms, setHasAcceptedTerms] = useState(() => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('hasAcceptedTerms') === 'true';
     }
     return false;
   });
+
   const [showTermsDialog, setShowTermsDialog] = useState(false);
   const [acceptTerms, setAcceptTerms] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const remainingGenerations = usageLimit - generationCount;
+  const progressPercentage = (generationCount / usageLimit) * 100;
+
   useEffect(() => {
     if (!hasAcceptedTerms) {
       setShowTermsDialog(true);
     }
   }, [hasAcceptedTerms]);
+
+  useEffect(() => {
+    (async () => {
+      const session = await supabase.auth.getSession();
+      const token = session.data.session?.access_token;
+
+      const headers: HeadersInit = {};
+
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const res = await fetch('/api/autofill/get', {
+        headers,
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) console.log(data.error);
+
+      setFormData(data.data);
+    })();
+  }, []);
+
+
+  const fetchUsage = useCallback(async () => {
+    try {
+      // supabase.auth.getSession() will only return a session if the user is authenticated
+      const session = await supabase.auth.getSession();
+      const token = session.data.session?.access_token;
+
+      const headers: HeadersInit = {}
+
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      if (isDev) headers['x-forwarded-for'] = '123.456.789.0';
+
+      const res = await fetch('/api/usage', {
+        headers,
+      });
+
+      if (!res.ok) console.error('Failed to fetch usage.');
+      const data = await res.json();
+
+      setGenerationCount(data.usageCount.usageCount);
+      setUsageLimit(data.usageLimit);
+
+      console.log('usageCount', data.usageCount);
+      console.log('usageLimit', data.usageLimit);
+
+      if (isAuthenticated) {
+        const res = await fetch('/api/subscription', {
+          headers,
+        });
+
+        if (!res.ok) console.error('Failed to fetch subscription/plan details.');
+        const subscriptionData = await res.json();
+        setUsageLimit(subscriptionData.maxUsage);
+      }
+    } catch (err) {
+      console.error('Failed to fetch generation usage.', err);
+    }
+  }, [isAuthenticated]);
+
+  useEffect (() => {
+    (async () => {
+      await fetchUsage();
+    })();
+  }, [fetchUsage]);
 
   const handleAcceptTerms = () => {
     if (acceptTerms) {
@@ -80,45 +157,68 @@ export default function Generator() {
 
 
   // Submit Generation
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    setLoading(true);
+    setError(null);
 
     if (!hasAcceptedTerms) {
       setShowTermsDialog(true);
+      setLoading(false);
       return;
     }
-
-    if (!isLoggedIn && generationCount >= MAX_FREE_GENERATIONS) {
+    console.log('isAuthenticated', isAuthenticated);
+    console.log('generation count:', generationCount);
+    console.log('maxUsage:', usageLimit);
+    if (!isAuthenticated && generationCount >= usageLimit) {
       setShowAuthPrompt(true);
+      setLoading(false);
       return;
     }
 
-    // Handle form submission and AI generation here
-    console.log('Generating cover letter with:', formData);
-    // Placeholder generated letter
-    setGeneratedLetter(`Dear Hiring Manager,
+    try {
+      const session = await supabase.auth.getSession();
+      const token = session.data.session?.access_token;
 
-I am writing to express my sincere interest in the ${formData.position} position at ${formData.company}. With my relevant experience and skills, I am confident in my ability to contribute meaningfully to your team.
+      const headers: HeadersInit = {};
 
-[Generated content will appear here based on the job description and your information]
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      if (isDev) headers['x-forwarded-for'] = '123.456.789.0';
 
-Thank you for considering my application. I look forward to discussing how I can contribute to ${formData.company}.
+      const res = await fetch('/api/generate', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(formData)
+      });
 
-Best regards,
-${formData.fullName}
-${formData.email}
-${formData.phone}`);
+      const data = await res.json();
 
-    if (!isLoggedIn) {
-      const newCount = generationCount + 1;
-      setGenerationCount(newCount);
-      localStorage.setItem('generationCount', newCount.toString());
+      if (!res.ok) {
+        setError(data.error || 'Something went wrong.');
+        toast({
+          title: "Error generating cover letter",
+          description: data.error || 'Please try again.',
+          variant: "destructive"
+        });
+      } else {
+        setGeneratedLetter(data.generatedLetter);
+        setGenerationCount(data.newCount);
+        toast({
+          title: "Cover letter generated",
+          description: "Your cover letter has been generated successfully.",
+        });
+      }
+    } catch (error) {
+      setError('An unexpected error occured.');
+      toast({
+        title: "Unexpected error",
+        description: "Please try again later.",
+        variant: "destructive"
+      });
     }
-
-    toast({
-      title: "Cover letter generated",
-      description: "Your cover letter has been generated successfully."
-    });
+    await fetchUsage();
+    setLoading(false);
   };
 
   const handleTransferToEditor = () => {
@@ -144,53 +244,69 @@ ${formData.phone}`);
     router.push('/editor');
   };
 
-  const remainingGenerations = MAX_FREE_GENERATIONS - generationCount;
-  const progressPercentage = (generationCount / MAX_FREE_GENERATIONS) * 100;
+
 
   return (
     <>
       <Navbar />
       <main className="min-h-screen bg-gray-50 pt-24 pb-8">
         <div className="max-w-7xl mx-auto px-6">
-          {!isLoggedIn && (
-            <Card className="mb-6">
-              <CardContent className="py-6">
-                <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-                  <div className="flex-1 w-full">
+          <Card className="mb-6">
+            <CardContent className="py-6">
+              <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+                <div className="flex-1 w-full">
+                  {isAuthenticated ?
+                    <h3 className="font-semibold mb-2">
+                      {remainingGenerations > 0
+                        ? `${remainingGenerations} generations remaining`
+                        : "Generation limit reached"}
+                    </h3>
+                  :
                     <h3 className="font-semibold mb-2">
                       {remainingGenerations > 0
                         ? `${remainingGenerations} free generations remaining`
                         : "Free generations limit reached"}
                     </h3>
-                    <Progress value={progressPercentage} className="h-2" />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Link href="/login">
-                      <Button variant="outline">Log in</Button>
-                    </Link>
-                    <Link href="/signup">
-                      <Button>Sign up for unlimited access</Button>
-                    </Link>
-                  </div>
+                  }
+                  <Progress value={progressPercentage} className="h-2" />
                 </div>
-              </CardContent>
-            </Card>
-          )}
+                {!isAuthenticated ? (
+                <div className="flex items-center gap-2">
+                  <Link href="/login">
+                    <Button variant="outline">Log in</Button>
+                  </Link>
+                  <Link href="/signup">
+                    <Button>Sign up for unlimited access</Button>
+                  </Link>
+                </div>
+                  ) : (
+                  <div className="flex items-center gap-2">
+                    <Link href="/signup">
+                      <Button>Upgrade</Button>
+                    </Link>
+                  </div>
+                  )}
+              </div>
+            </CardContent>
+          </Card>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-[30%_70%] gap-3">
             {/* Left side - Form */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-2xl">Cover Letter Generator</CardTitle>
+                <CardTitle className="text-2xl">Generator</CardTitle>
               </CardHeader>
               <CardContent>
+                <div className="text-lg border-b-2">Personal Information</div>
+
                 <form onSubmit={handleSubmit} className="space-y-4">
+                  {/* Personal Information Section*/}
                   <div>
-                    <Label htmlFor="fullName">Full Name</Label>
+                    <Label htmlFor="full_name">Full Name</Label>
                     <Input
-                      id="fullName"
-                      value={formData.fullName}
-                      onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
+                      id="full_name"
+                      value={formData.full_name}
+                      onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
                       required
                     />
                   </div>
@@ -214,6 +330,51 @@ ${formData.phone}`);
                       value={formData.phone}
                       onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                       required
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="address">Address</Label>
+                    <Input
+                      id="address"
+                      value={formData.address}
+                      onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="city">City</Label>
+                    <Input
+                      id="city"
+                      value={formData.city}
+                      onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="state">State</Label>
+                    <Input
+                      id="state"
+                      value={formData.state}
+                      onChange={(e) => setFormData({ ...formData, state: e.target.value })}
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="zip_code">ZIP Code</Label>
+                    <Input
+                      id="zip_code"
+                      value={formData.zip_code}
+                      onChange={(e) => setFormData({ ...formData, zip_code: e.target.value })}
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="skills">Skills</Label>
+                    <Textarea
+                      id="skills"
+                      value={formData.skills}
+                      onChange={(e) => setFormData({ ...formData, skills: e.target.value })}
                     />
                   </div>
 
@@ -252,14 +413,13 @@ ${formData.phone}`);
                   <Button 
                     type="submit" 
                     className="w-full"
-                    disabled={!isLoggedIn && generationCount >= MAX_FREE_GENERATIONS}
                   >
                     Generate Cover Letter
                   </Button>
 
-                  {!isLoggedIn && generationCount >= MAX_FREE_GENERATIONS && (
+                  {!isAuthenticated && generationCount >= usageLimit && (
                     <p className="text-sm text-muted-foreground text-center">
-                      You've reached the limit for free generations.{' '}
+                      You&#39;ve reached the limit for free generations.{' '}
                       <Link href="/signup" className="text-primary hover:underline">
                         Sign up
                       </Link>
@@ -301,7 +461,7 @@ ${formData.phone}`);
           <DialogHeader>
             <DialogTitle>Free Generation Limit Reached</DialogTitle>
             <DialogDescription>
-              You've used all your free generations. Sign up for unlimited access to our AI-powered cover letter generator.
+              You&#39;ve used all your free generations. Sign up for unlimited access to our AI-powered cover letter generator.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="flex-col sm:flex-row gap-2">
@@ -327,7 +487,7 @@ ${formData.phone}`);
             <div className="prose prose-sm">
               <h3 className="text-lg font-semibold mb-2">1. Acceptance of Terms</h3>
               <p className="mb-4">
-                By accessing and using CoverAI's services, you agree to be bound by these Terms of Service and all applicable laws and regulations.
+                By accessing and using CoverAI&#39;s services, you agree to be bound by these Terms of Service and all applicable laws and regulations.
               </p>
 
               <h3 className="text-lg font-semibold mb-2">2. Use of Service</h3>

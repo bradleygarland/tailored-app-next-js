@@ -118,13 +118,13 @@ export default function Navbar() {
                   >
                     Editor
                   </Link>
-                  <Link 
+                  {/*<Link
                     href="/history" 
                     className={getMobileLinkClass('/history')}
                     onClick={() => setIsOpen(false)}
                   >
                     History
-                  </Link>
+                  </Link>*/}
                   {!isAuthenticated && (
                     <div className="mt-4">
                       <Link 
@@ -148,9 +148,9 @@ export default function Navbar() {
             <Link href="/editor" className={getLinkClass('/editor')}>
               Editor
             </Link>
-            <Link href="/history" className={getLinkClass('/history')}>
+            {/*<Link href="/history" className={getLinkClass('/history')}>
               History
-            </Link>
+            </Link>*/}
             {isAuthenticated ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
