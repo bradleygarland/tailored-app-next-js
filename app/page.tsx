@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { FileText, Star, Zap, CheckCircle, Sparkles, Brain, Clock } from 'lucide-react';
+import { CheckCircle, Sparkles, Brain, Clock } from 'lucide-react';
 import Link from 'next/link';
 import Navbar from '@/components/Navbar';
 import FadeInSection from '@/components/FadeInSection';
@@ -17,8 +17,6 @@ import {
   CarouselNext,
   CarouselPrevious,
 } from "@/components/ui/carousel";
-import { useInterval } from "@/hooks/use-interval";
-import Autoplay from "embla-carousel-autoplay";
 import {
   Accordion,
   AccordionContent,
@@ -58,13 +56,10 @@ const testimonials = [
 ];
 
 export default function Home() {
-  const { isLoggedIn } = useAuth();
+  const { isAuthenticated } = useAuth();
   const [isScrolled, setIsScrolled] = useState(false);
   const [isAnnual, setIsAnnual] = useState(false);
   const [activeFeature, setActiveFeature] = useState(0);
-  const [autoplayPlugin] = useState(() =>
-    Autoplay({ delay: 4000, stopOnInteraction: true, stopOnMouseEnter: true })
-  );
 
   useEffect(() => {
     const handleScroll = () => {
@@ -120,7 +115,7 @@ export default function Home() {
   };
 
   const getPricingLink = (plan: string) => {
-    if (!isLoggedIn) {
+    if (!isAuthenticated) {
       return '/signup';
     }
     return `/upgrade?plan=${plan.toLowerCase()}`;
@@ -216,7 +211,7 @@ export default function Home() {
                 <CardFooter>
                   <Link href={getPricingLink('starter')} className="w-full">
                     <Button className="w-full">
-                      {isLoggedIn ? 'Upgrade to Starter' : 'Get Started'}
+                      {isAuthenticated ? 'Upgrade to Starter' : 'Get Started'}
                     </Button>
                   </Link>
                 </CardFooter>
@@ -249,7 +244,7 @@ export default function Home() {
                 <CardFooter>
                   <Link href={getPricingLink('pro')} className="w-full">
                     <Button className="w-full" variant="default">
-                      {isLoggedIn ? 'Upgrade to Pro' : 'Get Started'}
+                      {isAuthenticated ? 'Upgrade to Pro' : 'Get Started'}
                     </Button>
                   </Link>
                 </CardFooter>
@@ -297,7 +292,6 @@ export default function Home() {
                 align: "start",
                 loop: true,
               }}
-              plugins={[autoplayPlugin]}
               className="w-full"
             >
               <CarouselContent className="-ml-4">

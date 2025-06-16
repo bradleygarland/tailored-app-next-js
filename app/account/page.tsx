@@ -8,29 +8,45 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { useAuth } from '@/stores/auth';
 import Navbar from '@/components/Navbar';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
-import { CreditCard, FileText } from 'lucide-react';
+import {CreditCard, FileText, AlertTriangle, X, Calendar, Globe, Check, Zap, Crown, Shield, Star} from 'lucide-react';
+import { plans, Plan } from '@/lib/subscription'
 
 interface Subscription {
-  id: string;
-  plan: string;
-  status: string;
-  current_period_start: string;
-  current_period_end: string;
+  id: string | null;
+  plan: string | 'free';
+  status: 'active' | 'cancelled' | 'past_due';
+  current_period_start: string | 'unknown';
+  current_period_end: string | 'unknown';
+  cancelAtPeriodEnd: boolean | 'unknown';
+  next_billing_date: string | 'unknown';
+  paymentMethod: {
+    type: 'card' | 'unknown';
+    last4: string | 'unknown';
+    brand: string | 'unknown';
+  };
 }
+
+// Mock current subscription data
+const mockSubscription: Subscription = {
+  id: 'sub_123456789',
+  plan: 'pro',
+  status: 'cancelled',
+  current_period_start: '2024-01-15',
+  current_period_end: '2025-01-15',
+  cancelAtPeriodEnd: false,
+  next_billing_date: '2025-01-15',
+  paymentMethod: {
+    type: 'card',
+    last4: '4242',
+    brand: 'Visa'
+  }
+};
 
 export default function Account() {
   const { user } = useAuth();
@@ -62,8 +78,35 @@ export default function Account() {
   });
 
   const [isLoading, setIsLoading] = useState(false);
-  const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [isLoadingSubscription, setIsLoadingSubscription] = useState(true);
+
+  const [currentSubscription, setCurrentSubscription] = useState<Subscription>(mockSubscription);
+  const [showCancelConfirmation, setShowCancelConfirmation] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
+
+  const currentPlan = plans.find(plan => plan.id === currentSubscription.plan);
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+  };
+
+  const handleCancelSubscription = () => {
+    console.log('Subscription cancelled');
+    // Here you would typically make an API call to cancel the subscription
+  };
+
+  const getPlanIcon = (planId: string) => {
+    switch (planId) {
+      case 'starter': return <Zap className="w-6 h-6" />;
+      case 'pro': return <Crown className="w-6 h-6" />;
+      case 'enterprise': return <Shield className="w-6 h-6" />;
+      default: return <Star className="w-6 h-6" />;
+    }
+  };
 
   useEffect(() => {
     const fetchUserInfo = async () => {
@@ -94,19 +137,32 @@ export default function Account() {
 
       setIsLoadingSubscription(true);
       try {
-        const { data, error } = await supabase
-          .from('subscriptions')
-          .select('*')
-          .eq('user_id', user.id)
-          .eq('status', 'active')
-          .single();
+        const session = await supabase.auth.getSession();
+        const token = session.data.session?.access_token;
 
-        if (error) {
-          if (error.code !== 'PGRST116') { // No rows returned
-            console.error('Error fetching subscription:', error);
-          }
+        const headers: HeadersInit = {};
+
+        if  (token) headers['Authorization'] = `Bearer ${token}`;
+
+        const res = await fetch('/api/subscription', {
+          headers,
+        })
+
+        if (!res.ok) {
+          console.error('Failed to fetch subscription/plan details.');
         } else {
-          setSubscription(data);
+
+          const subscriptionData = await res.json();
+          const rawSubData = subscriptionData.data;
+          console.log('Subscription fetch success', subscriptionData);
+          setCurrentSubscription({
+            ...rawSubData,
+            paymentMethod: rawSubData.paymentMethod || {
+              type: 'unknown',
+              last4: 'unknown',
+              brand: 'unknown',
+            }
+          });
         }
       } catch (error) {
         console.error('Error fetching subscription:', error);
@@ -227,6 +283,7 @@ export default function Account() {
     }
   };
 
+
   return (
     <>
       <Navbar />
@@ -235,9 +292,8 @@ export default function Account() {
           <h1 className="text-3xl font-bold mb-8">Account Settings</h1>
           
           <Tabs defaultValue="profile" className="space-y-6">
-            <TabsList className="grid grid-cols-4 gap-4 bg-muted p-1 w-full max-w-md">
+            <TabsList className="grid grid-cols-3 gap-4 bg-muted p-1 w-full max-w-md">
               <TabsTrigger value="profile">Profile</TabsTrigger>
-              <TabsTrigger value="billing">Billing</TabsTrigger>
               <TabsTrigger value="subscription">Subscription</TabsTrigger>
               <TabsTrigger value="autofill">Auto-fill</TabsTrigger>
             </TabsList>
@@ -374,89 +430,115 @@ export default function Account() {
               </Card>
             </TabsContent>
 
-            <TabsContent value="billing">
-              <div className="space-y-6">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Payment Methods</CardTitle>
-                    <CardDescription>Manage your payment methods</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="text-center py-8">
-                      <CreditCard className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                      <p className="text-lg font-medium">No payment methods</p>
-                      <p className="text-muted-foreground mb-4">
-                        You haven&#39;t added any payment methods yet
-                      </p>
-                      <Link href="/account/payment-method">
-                        <Button>Add Payment Method</Button>
-                      </Link>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Transaction History</CardTitle>
-                    <CardDescription>View your recent transactions</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-center py-8">
-                      <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                      <p className="text-lg font-medium">No transactions</p>
-                      <p className="text-muted-foreground">
-                        Your transaction history will appear here
-                      </p>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            </TabsContent>
-
+            {/* Subscription Details Tab */}
             <TabsContent value="subscription">
               <Card>
                 <CardHeader>
-                  <CardTitle>Subscription Details</CardTitle>
-                  <CardDescription>Manage your subscription plan</CardDescription>
+                  <CardTitle className="ml-6">Subscription Details</CardTitle>
+                  <CardDescription className="ml-6">Manage your subscription plan</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {isLoadingSubscription ? (
-                    <div className="text-center py-4">
-                      <p className="text-muted-foreground">Loading subscription details...</p>
-                    </div>
-                  ) : subscription ? (
-                    <>
-                      <div className="bg-muted p-4 rounded-lg">
-                        <div className="flex justify-between items-center">
-                          <div>
-                            <p className="font-medium">{subscription.plan}</p>
-                            <p className="text-sm text-muted-foreground">
-                              Active until {format(new Date(subscription.current_period_end), 'MMMM d, yyyy')}
+                  {!isLoadingSubscription ? (
+                    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                      {/* Current Subscription Overview */}
+                      <div className="bg-muted backdrop-blur-md rounded-xl border border-gray-300 p-6 mb-8 shadow">
+                        <div className="flex items-start justify-between mb-6">
+                          <div className="flex items-center space-x-4">
+                            <div className={`w-12 h-12 bg-gradient-to-r ${currentPlan?.id === 'pro' ? 'from-purple-500 to-pink-500' : 'from-cyan-500 to-blue-500'} rounded-lg flex items-center justify-center`}>
+                              {getPlanIcon(currentPlan?.id || 'starter')}
+                            </div>
+                            <div>
+                              <h2 className="text-2xl font-bold">{currentPlan?.name} Plan</h2>
+                              <p className="text-muted-foreground">${currentPlan?.price}/month</p>
+                            </div>
+                          </div>
+                          <div className={`px-3 py-1 rounded-full text-sm font-medium ${
+                            currentSubscription.status === 'active'
+                              ? 'bg-green-500/20 text-green-600 border border-green-500/30'
+                              : 'bg-red-500/20 text-red-500 border border-red-500/30'
+                          }`}>
+                            {currentSubscription.status.charAt(0).toUpperCase() + currentSubscription.status.slice(1)}
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                          <div className="bg-gray-200 rounded-lg p-4 border border-white/5">
+                            <div className="flex items-center space-x-2 mb-2">
+                              <Calendar className="w-5 h-5" />
+                              <span className="text-sm text-gray-400">Next Billing</span>
+                            </div>
+                            <p className="text-lg font-semibold">{formatDate(currentSubscription.next_billing_date)}</p>
+                          </div>
+
+                          <div className="bg-gray-200 rounded-lg p-4 border border-white/5">
+                            <div className="flex items-center space-x-2 mb-2">
+                              <CreditCard className="w-5 h-5" />
+                              <span className="text-sm text-gray-400">Payment Method</span>
+                            </div>
+                            <p className="text-lg font-semibold">
+                              {currentSubscription.paymentMethod.brand} •••• {currentSubscription.paymentMethod.last4}
                             </p>
                           </div>
-                          <Link href="/account/manage-subscription">
-                            <Button variant="outline">
-                              Manage Subscription
-                            </Button>
-                          </Link>
+
+                          <div className="bg-gray-200 rounded-lg p-4 border border-muted/5">
+                            <div className="flex items-center space-x-2 mb-2">
+                              <Globe className="w-5 h-5" />
+                              <span className="text-sm text-gray-400">Current Period</span>
+                            </div>
+                            <p className="text-lg font-semibold">
+                              {formatDate(currentSubscription.current_period_start)} - {formatDate(currentSubscription.current_period_end)}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-col sm:flex-row gap-4">
+                          <button
+                            onClick={() => router.push('/upgrade')}
+                            className="px-6 py-3 bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-semibold rounded-lg hover:shadow-lg hover:shadow-cyan-500/25 transition-all duration-300 hover:scale-105"
+                          >
+                            Upgrade Plan
+                          </button>
+                          <button
+                            onClick={() => setShowCancelConfirmation(true)}
+                            className="px-6 py-3 bg-gradient-to-r from-red-500 to-red-600 text-white font-semibold rounded-lg hover:shadow-lg hover:shadow-red-500/25 transition-all duration-300 hover:scale-105"
+                          >
+                            Cancel Subscription
+                          </button>
                         </div>
                       </div>
 
-                      <div className="space-y-2">
-                        <p className="text-sm font-medium">Next billing date:</p>
-                        <p className="text-sm text-muted-foreground">
-                          {format(new Date(subscription.current_period_end), 'MMMM d, yyyy')}
-                        </p>
+                      {/* Current Plan Benefits */}
+                      <div className="bg-muted backdrop-blur-md rounded-xl border border-gray-300 p-6 mb-8 shadow">
+                        <h3 className="text-xl font-bold mb-4">Your Current Benefits</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {currentPlan?.features.map((feature, index) => (
+                            <div key={index} className="flex items-center space-x-3">
+                              <Check className="w-5 h-5 text-green-400 flex-shrink-0" />
+                              <span className="text-muted-foreground">{feature}</span>
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                    </>
-                  ) : (
-                    <div className="text-center py-4 space-y-4">
-                      <p className="text-muted-foreground">No active subscription</p>
-                      <Link href="/upgrade">
-                        <Button>Upgrade Now</Button>
-                      </Link>
                     </div>
-                  )}
+                    ) : (
+                      <h3>Loading subscription...</h3>
+                    )}
+                </CardContent>
+              </Card>
+
+              <Card className="mt-4">
+                <CardHeader>
+                  <CardTitle>Transaction History</CardTitle>
+                  <CardDescription>View your recent transactions</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-center py-8">
+                    <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                    <p className="text-lg font-medium">No transactions</p>
+                    <p className="text-muted-foreground">
+                      Your transaction history will appear here
+                    </p>
+                  </div>
                 </CardContent>
               </Card>
             </TabsContent>
@@ -559,6 +641,43 @@ export default function Account() {
             </TabsContent>
           </Tabs>
         </div>
+
+        {/* Cancel Confirmation Modal */}
+        {showCancelConfirmation && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-gradient-to-r from-red-500/20 to-red-600/20 backdrop-blur-md rounded-xl border border-red-400/40 p-6 max-w-md w-full animate-in slide-in-from-top-2 duration-300">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center space-x-3">
+                  <AlertTriangle className="w-6 h-6 text-red-400" />
+                  <h4 className="text-lg font-semibold text-red-300">Cancel Subscription</h4>
+                </div>
+                <button
+                  onClick={() => setShowCancelConfirmation(false)}
+                  className="text-red-300 hover:text-red-200 transition-colors duration-200"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <p className="text-gray-300 mb-6">
+                Are you sure you want to cancel your subscription? You&#39;ll lose access to all premium features at the end of your current billing period.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={handleCancelSubscription}
+                  className="flex-1 px-4 py-2 bg-red-500 hover:bg-red-600 text-white font-medium rounded-lg transition-all duration-200 hover:scale-105"
+                >
+                  Yes, Cancel
+                </button>
+                <button
+                  onClick={() => setShowCancelConfirmation(false)}
+                  className="flex-1 px-4 py-2 bg-slate-600 hover:bg-slate-500 text-white font-medium rounded-lg transition-all duration-200 hover:scale-105"
+                >
+                  Keep Subscription
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
     </>
   );

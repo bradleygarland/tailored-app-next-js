@@ -6,6 +6,7 @@ interface User {
   email: string;
   name?: string;
   plan: string;
+  customerId: string;
 }
 
 interface AuthState {
@@ -55,6 +56,7 @@ export const useAuth = create<AuthState>((set, get) => ({
       email: profile.email,
       name: profile.name || undefined,
       plan: subscription.plan || 'free',
+      customerId: profile.stripe_customer_id,
     };
 
     set({ user: userData, isAuthenticated: true });
@@ -79,10 +81,28 @@ export const useAuth = create<AuthState>((set, get) => ({
 
     if (!profile) throw new Error('No profile found');
 
-    // Update the profile with the name
+    // Create new stripe user
+    const res = await fetch('/api/stripe/create-customer', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: user.id,
+        email: user.email,
+      })
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      console.error(data.error);
+    }
+
+    const customerId = data?.stripe_customer_id;
+
+    // Update the profile with the name and customer id
     const { data: updatedProfile, error: updateError } = await supabase
       .from('profiles')
-      .update({ name })
+      .update({ name: name, stripe_customer_id: customerId })
       .eq('id', user.id)
       .select()
       .single();
@@ -103,7 +123,8 @@ export const useAuth = create<AuthState>((set, get) => ({
       id: updatedProfile.id,
       email: updatedProfile.email,
       name: updatedProfile.name || undefined,
-      plan: subscription.plan || 'free'
+      plan: subscription.plan || 'free',
+      customerId: updatedProfile.stripe_customer_id,
     };
 
     set({ user: userData, isAuthenticated: true });
@@ -212,6 +233,7 @@ supabase.auth.onAuthStateChange((event, session) => {
             email: profile.email,
             name: profile.name || undefined,
             plan: 'free', // DEV const given to plan (change later)
+            customerId: profile.stripe_customer_id,
           };
           useAuth.setState({ user: userData, isAuthenticated: true, initialized: true });
         } else {

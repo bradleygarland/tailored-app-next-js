@@ -23,6 +23,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/stores/auth';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase'
+import { PLAN_USAGE_LIMITS} from "@/lib/subscription";
 
 const PLACEHOLDER_TEXT = "Your generated cover letter will appear here. Once generated, you can edit it directly in this editor.";
 
@@ -90,9 +91,12 @@ export default function Generator() {
 
       const data = await res.json();
 
-      if (!res.ok) console.log(data.error);
+      if (!res.ok) {
+        console.log(data.error);
+      } else {
+        setFormData(data.data);
+      }
 
-      setFormData(data.data);
     })();
   }, []);
 
@@ -127,8 +131,9 @@ export default function Generator() {
         });
 
         if (!res.ok) console.error('Failed to fetch subscription/plan details.');
-        const subscriptionData = await res.json();
-        setUsageLimit(subscriptionData.maxUsage);
+        const response = await res.json();
+        setUsageLimit(PLAN_USAGE_LIMITS[response.data.plan]);
+
       }
     } catch (err) {
       console.error('Failed to fetch generation usage.', err);
@@ -281,7 +286,7 @@ export default function Generator() {
                 </div>
                   ) : (
                   <div className="flex items-center gap-2">
-                    <Link href="/signup">
+                    <Link href="/upgrade">
                       <Button>Upgrade</Button>
                     </Link>
                   </div>
