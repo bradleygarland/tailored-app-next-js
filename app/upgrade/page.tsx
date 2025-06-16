@@ -10,12 +10,14 @@ import { CheckCircle } from 'lucide-react';
 import Link from 'next/link';
 import Navbar from '@/components/Navbar';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/stores/auth';
 
 export default function Upgrade() {
   const [isAnnual, setIsAnnual] = useState(false);
   const [promoCode, setPromoCode] = useState('');
   const [isApplyingPromo, setIsApplyingPromo] = useState(false);
   const { toast } = useToast();
+  const { user } = useAuth();
 
   const calculatePrice = (basePrice: number) => {
     return isAnnual ? (basePrice * 12 * 0.8).toFixed(0) : basePrice;
@@ -41,6 +43,28 @@ export default function Upgrade() {
       });
     } finally {
       setIsApplyingPromo(false);
+    }
+  };
+
+  const handleCheckout = async (plan: 'starter' | 'pro', interval: 'monthly' | 'yearly') => {
+    const res = await fetch('/api/stripe/create-checkout-session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: user?.email,
+        plan: plan,
+        interval: interval,
+        userId: user?.id,
+        customerId: user?.customerId,
+      }),
+    });
+
+    const data: { url?: string; error?: string } = await res.json();
+
+    if (data.url) {
+      window.location.href = data.url;
+    } else {
+      console.error('Checkout failed: ' + (data.error ?? 'Unknown error'));
     }
   };
 
@@ -81,9 +105,7 @@ export default function Upgrade() {
                     Basic templates
                   </li>
                 </ul>
-                <Link href={`/checkout?plan=starter&billing=${isAnnual ? 'annual' : 'monthly'}`}>
-                  <Button className="w-full">Select Starter</Button>
-                </Link>
+                <Button className="w-full" onClick={isAnnual ? () => handleCheckout('starter', 'yearly') : () => handleCheckout('starter', 'monthly')}>Select Starter</Button>
               </CardContent>
             </Card>
 
@@ -110,9 +132,7 @@ export default function Upgrade() {
                     AI optimization
                   </li>
                 </ul>
-                <Link href={`/checkout?plan=pro&billing=${isAnnual ? 'annual' : 'monthly'}`}>
-                  <Button className="w-full" variant="default">Select Pro</Button>
-                </Link>
+                <Button className="w-full" variant="default" onClick={isAnnual ? () => handleCheckout('pro', 'yearly') : () => handleCheckout('pro', 'monthly')}>Select Pro</Button>
               </CardContent>
             </Card>
 
