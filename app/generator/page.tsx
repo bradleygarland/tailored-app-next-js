@@ -260,19 +260,19 @@ export default function Generator() {
             <CardContent className="py-6">
               <div className="flex flex-col md:flex-row items-center justify-between gap-4">
                 <div className="flex-1 w-full">
-                  {isAuthenticated ?
+                  {isAuthenticated ? (
                     <h3 className="font-semibold mb-2">
                       {remainingGenerations > 0
-                        ? `${remainingGenerations} generations remaining`
-                        : "Generation limit reached"}
+                        ? (`${usageLimit > 15 ? 'Infinite' : remainingGenerations} generations remaining`)
+                        : ("Generation limit reached")}
                     </h3>
-                  :
+                    ) : (
                     <h3 className="font-semibold mb-2">
                       {remainingGenerations > 0
                         ? `${remainingGenerations} free generations remaining`
                         : "Free generations limit reached"}
                     </h3>
-                  }
+                  )}
                   <Progress value={progressPercentage} className="h-2" />
                 </div>
                 {!isAuthenticated ? (

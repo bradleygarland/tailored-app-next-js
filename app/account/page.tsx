@@ -11,9 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/stores/auth';
 import Navbar from '@/components/Navbar';
 import { useToast } from '@/hooks/use-toast';
-import { format } from 'date-fns';
 import { supabase } from '@/lib/supabase';
-import Link from 'next/link';
 import {CreditCard, FileText, AlertTriangle, X, Calendar, Globe, Check, Zap, Crown, Shield, Star} from 'lucide-react';
 import { plans, Plan } from '@/lib/subscription'
 
@@ -192,10 +190,8 @@ export default function Account() {
           console.log('Subscription fetch success', subscriptionData);
           setCurrentSubscription({
             ...rawSubData,
-            paymentMethod: rawSubData.paymentMethod || {
-              type: 'unknown',
-              last4: 'unknown',
-              brand: 'unknown',
+            paymentMethod: {
+              ...rawSubData,
             }
           });
         }
@@ -475,7 +471,6 @@ export default function Account() {
                 <CardContent className="space-y-4">
                   {!isLoadingSubscription ? (
                     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                      {/* Current Subscription Overview */}
                       <div className="bg-muted backdrop-blur-md rounded-xl border border-gray-300 p-6 mb-8 shadow">
                         <div className="flex items-start justify-between mb-6">
                           <div className="flex items-center space-x-4">
@@ -500,9 +495,14 @@ export default function Account() {
                           <div className="bg-gray-200 rounded-lg p-4 border border-white/5">
                             <div className="flex items-center space-x-2 mb-2">
                               <Calendar className="w-5 h-5" />
-                              <span className="text-sm text-gray-400">Next Billing</span>
+                              <span className="text-sm text-gray-400">
+                                {currentSubscription.status === 'cancelled'
+                                  ? 'Ends on'
+                                  : 'Next Billing'
+                                }
+                              </span>
                             </div>
-                            <p className="text-lg font-semibold">{formatDate(currentSubscription.next_billing_date)}</p>
+                            <p className="text-lg font-semibold">{formatDate(currentSubscription.current_period_end)}</p>
                           </div>
 
                           <div className="bg-gray-200 rounded-lg p-4 border border-white/5">
@@ -511,7 +511,7 @@ export default function Account() {
                               <span className="text-sm text-gray-400">Payment Method</span>
                             </div>
                             <p className="text-lg font-semibold">
-                              {currentSubscription.paymentMethod.brand} •••• {currentSubscription.paymentMethod.last4}
+                              {currentSubscription.paymentMethod.brand.toUpperCase()} •••• {currentSubscription.paymentMethod.last4}
                             </p>
                           </div>
 
@@ -551,7 +551,6 @@ export default function Account() {
                         </div>
                       </div>
 
-                      {/* Current Plan Benefits */}
                       <div className="bg-muted backdrop-blur-md rounded-xl border border-gray-300 p-6 mb-8 shadow">
                         <h3 className="text-xl font-bold mb-4">Your Current Benefits</h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -587,6 +586,7 @@ export default function Account() {
               </Card>
             </TabsContent>
 
+            {/* Autofill Tab Section */}
             <TabsContent value="autofill">
               <Card>
                 <CardHeader>

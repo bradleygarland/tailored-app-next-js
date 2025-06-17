@@ -30,10 +30,12 @@ export async function POST(req: NextRequest) {
 
     // Get Max Generations from subscription
     const plan = await getUserSubscription(supabase, token);
-    const maxGenerations = PLAN_USAGE_LIMITS[plan] ?? 0;
+    const maxGenerations = PLAN_USAGE_LIMITS[plan?.plan] ?? 0;
 
     const usageData = await getUserOrAnonUsage(supabase, token, ip);
     const usageCount = usageData.usageCount;
+
+    console.log(plan, maxGenerations, usageData, usageCount);
 
     // Check limit
     // TEST_MAX_GENERATIONS DEV VAR
@@ -60,13 +62,12 @@ export async function POST(req: NextRequest) {
       - Job Description: ${jobDescription}
       - Date: ${new Date()}
 
-      The tone should be confident, engaging, and professional. Keep it concise and focused on why the applicant is a good fit for the role. Maintain honesty and integrity based on the skills provided. Focus on appealing to the recipient's sense of honor and attempt to convince them to look into an interview or further opportunities.
-      Make sure that the cover letter is ready to be copied and pasted without any placeholder effects. If no information is given for certain parts, do not include it.
+      The tone should be confident, engaging, and professional. Keep it concise and focused on why the applicant is a good fit for the role. Maintain honesty and integrity based on the skills provided. Focus on appealing to the recipient's sense of honor and attempt to convince them to look into an interview or further opportunities. There is no set opportunity for discussion, convince them otherwise.
+      Make sure that the cover letter is ready to be copied and pasted without any placeholder effects. If no information is given for certain parts, do not include it and make sure that there are no brackets or square brackets.
     `;
 
     const inputTokens = enc.encode(prompt);
     const inputTokenCount = inputTokens.length;
-    //enc.free();
     console.log("input tokens:", inputTokenCount);
 
     if (inputTokenCount > 2048) {

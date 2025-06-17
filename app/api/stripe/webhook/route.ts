@@ -38,8 +38,7 @@ export async function POST(request: NextRequest) {
       const plan = session.metadata?.plan as string;
       const interval = session.metadata?.interval as string;
 
-      console.log('METADATA', session.metadata);
-      console.log('Subscription Id', session.subscription as string);
+      //console.log('CHECKOUT COMPLETED:', session);
 
       if (!userId || !stripeSubscriptionId) {
         console.error('Missing userId or stripeSubscriptionId in session metadata');
@@ -71,12 +70,13 @@ export async function POST(request: NextRequest) {
       {/* Invoice Paid */}
 
       const invoice = event.data.object as Stripe.Invoice;
-      console.log('Invoice', invoice);
+      //console.log('Invoice', invoice);
       return NextResponse.json({ received: true });
     }
     case 'customer.subscription.created': {
       {/* Customer Subscription Created */}
       const subscription = event.data.object as Stripe.Subscription;
+      //console.log('SUBSCRIPTION', subscription);
 
       const stripeCustomerId = subscription.customer as string;
 
@@ -95,9 +95,21 @@ export async function POST(request: NextRequest) {
 
       const stripeSubscriptionId = subscription.id;
       const interval = subscription.items.data[0]?.price.recurring?.interval || 'unknown';
+      const intervalCount = subscription.items.data[0]?.price.recurring?.interval_count || 1;
       const status = subscription.status;
-      const current_period_start = new Date(subscription.billing_cycle_anchor * 1000).toISOString();
-      const created_at = new Date(subscription.created * 1000).toISOString();
+      const start = subscription.billing_cycle_anchor * 1000
+      let period_end
+      if (interval === 'month') {
+        period_end = new Date(start);
+        period_end.setMonth(period_end.getMonth() + intervalCount);
+      } else if (interval === 'year') {
+        period_end = new Date(start);
+        period_end.setFullYear(period_end.getFullYear() + intervalCount);
+      } else {
+        period_end = null;
+      }
+      const current_period_end = period_end ? period_end.toISOString() : null;
+      const current_period_start = new Date(start).toISOString();
 
       const { error: subError } = await supabase
         .from('subscriptions')
@@ -108,7 +120,7 @@ export async function POST(request: NextRequest) {
             interval: interval,
             status: status,
             current_period_start: current_period_start,
-            created_at: created_at,
+            current_period_end: current_period_end,
           }
         ], { onConflict: 'user_id' });
 
@@ -131,6 +143,32 @@ export async function POST(request: NextRequest) {
 
       if (updateError) {
         console.error('Failed to update user subscription on delete:', updateError);
+      }
+
+      return NextResponse.json({ received: true });
+    }
+    case 'payment_intent.succeeded': {
+      const paymentIntent = event.data.object as Stripe.PaymentIntent;
+      const paymentMethod = await stripe.paymentMethods.retrieve(paymentIntent?.payment_method as string);
+
+      const customerId = paymentIntent.customer as string;
+
+      const brand = paymentMethod.card?.brand as string;
+      const last4 = paymentMethod.card?.last4 as string;
+      const type = paymentMethod.type as string;
+
+      const { error: subError } = await supabase
+        .from('subscriptions')
+        .update(
+          {
+            type: type,
+            brand: brand,
+            last4: last4,
+          })
+        .eq('stripe_customer_id', customerId);
+
+      if  (subError) {
+        console.error('Failed to update subscription:', subError);
       }
 
       return NextResponse.json({ received: true });
