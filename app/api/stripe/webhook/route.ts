@@ -70,13 +70,14 @@ export async function POST(request: NextRequest) {
       {/* Invoice Paid */}
 
       const invoice = event.data.object as Stripe.Invoice;
-      //console.log('Invoice', invoice);
+      console.log('Invoice', invoice);
       return NextResponse.json({ received: true });
     }
-    case 'customer.subscription.created': {
-      {/* Customer Subscription Created */}
+    case 'customer.subscription.created':
+    case 'customer.subscription.updated': {
+      {/* Customer Subscription Created || Customer Subscription Updated */}
       const subscription = event.data.object as Stripe.Subscription;
-      //console.log('SUBSCRIPTION', subscription);
+      console.log('SUBSCRIPTION', subscription);
 
       const stripeCustomerId = subscription.customer as string;
 
@@ -93,6 +94,8 @@ export async function POST(request: NextRequest) {
 
       const userId = profile.id;
 
+      const price = subscription.items.data[0]?.price;
+      const plan = price.nickname?.split('_')[0];
       const stripeSubscriptionId = subscription.id;
       const interval = subscription.items.data[0]?.price.recurring?.interval || 'unknown';
       const intervalCount = subscription.items.data[0]?.price.recurring?.interval_count || 1;
@@ -118,6 +121,7 @@ export async function POST(request: NextRequest) {
             user_id: userId,
             stripe_subscription_id: stripeSubscriptionId,
             interval: interval,
+            plan: plan,
             status: status,
             current_period_start: current_period_start,
             current_period_end: current_period_end,
@@ -133,16 +137,22 @@ export async function POST(request: NextRequest) {
     case 'customer.subscription.deleted': {
       const subscription = event.data.object;
 
-      console.log('Subscription:', subscription);
+      const stripeSubscriptionId = subscription.id;
 
-      const { error: updateError } = await supabase
+      const { error } = await supabase
         .from('subscriptions')
-        .update({ plan: 'free', stripe_subscription_id: null })
-        .eq('stripe_customer_id', subscription?.customer as string)
-        .single();
+        .update({
+          plan: 'free',
+          interval: 'month',
+          brand: null,
+          type: null,
+          last4: null,
+          stripe_subscription_id: null,
+        })
+        .eq('stripe_subscription_id', stripeSubscriptionId);
 
-      if (updateError) {
-        console.error('Failed to update user subscription on delete:', updateError);
+      if (error) {
+        console.error('Failed to update subscription on stripe DELETE:', error);
       }
 
       return NextResponse.json({ received: true });
@@ -156,6 +166,8 @@ export async function POST(request: NextRequest) {
       const brand = paymentMethod.card?.brand as string;
       const last4 = paymentMethod.card?.last4 as string;
       const type = paymentMethod.type as string;
+
+      console.log('Card Info: ', brand, last4, type);
 
       const { error: subError } = await supabase
         .from('subscriptions')
@@ -171,6 +183,25 @@ export async function POST(request: NextRequest) {
         console.error('Failed to update subscription:', subError);
       }
 
+      return NextResponse.json({ received: true });
+    }
+    case 'invoice.created': {
+      const invoice = event.data.object as Stripe.Invoice;
+
+      console.log('Invoice created: ', invoice);
+
+      return NextResponse.json({ received: true });
+    }
+    case 'invoice.finalized': {
+      const invoice = event.data.object as Stripe.Invoice;
+
+      console.log('Invoice finalized: ', invoice);
+
+      return NextResponse.json({ received: true });
+    }
+    case 'invoiceitem.created': {
+      const invoiceitem = event.data.object as Stripe.InvoiceItem;
+      console.log('InvoiceItem created: ', invoiceitem);
       return NextResponse.json({ received: true });
     }
     default:

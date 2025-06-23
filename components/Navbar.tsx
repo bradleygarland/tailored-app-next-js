@@ -79,9 +79,9 @@ export default function Navbar() {
                   <DropdownMenuItem asChild>
                     <Link href="/account">Account Settings</Link>
                   </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
+                  {/*<DropdownMenuItem asChild>
                     <Link href="/history">Cover Letter History</Link>
-                  </DropdownMenuItem>
+                  </DropdownMenuItem>*/}
                   {!user?.isPremium && (
                     <DropdownMenuItem asChild>
                       <Link href="/upgrade">Upgrade</Link>
@@ -162,9 +162,9 @@ export default function Navbar() {
                   <DropdownMenuItem asChild>
                     <Link href="/account">Account Settings</Link>
                   </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
+                  {/*<DropdownMenuItem asChild>
                     <Link href="/history">Cover Letter History</Link>
-                  </DropdownMenuItem>
+                  </DropdownMenuItem>*/}
                   {!user?.isPremium && (
                     <DropdownMenuItem asChild>
                       <Link href="/upgrade">Upgrade</Link>

@@ -10,7 +10,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/stores/auth';
 import Navbar from '@/components/Navbar';
-import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
 import {CreditCard, FileText, AlertTriangle, X, Calendar, Globe, Check, Zap, Crown, Shield, Star} from 'lucide-react';
 import { plans, Plan } from '@/lib/subscription'
@@ -48,7 +47,6 @@ const mockSubscription: Subscription = {
 
 export default function Account() {
   const { user } = useAuth();
-  const { toast } = useToast();
   const router = useRouter();
   const [profileData, setProfileData] = useState({
     full_name: '',
@@ -482,6 +480,7 @@ export default function Account() {
                               <p className="text-muted-foreground">${currentPlan?.price}/month</p>
                             </div>
                           </div>
+
                           <div className={`px-3 py-1 rounded-full text-sm font-medium ${
                             currentSubscription.status === 'active'
                               ? 'bg-green-500/20 text-green-600 border border-green-500/30'
@@ -490,7 +489,7 @@ export default function Account() {
                             {currentSubscription.status.charAt(0).toUpperCase() + currentSubscription.status.slice(1)}
                           </div>
                         </div>
-
+                        {currentSubscription.plan != 'free' && (
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
                           <div className="bg-gray-200 rounded-lg p-4 border border-white/5">
                             <div className="flex items-center space-x-2 mb-2">
@@ -525,6 +524,7 @@ export default function Account() {
                             </p>
                           </div>
                         </div>
+                          )}
 
                         <div className="flex flex-col sm:flex-row gap-4">
                           <button
@@ -533,20 +533,22 @@ export default function Account() {
                           >
                             Upgrade Plan
                           </button>
-                          {currentSubscription.status === 'active' ? (
-                          <button
-                            onClick={() => setShowCancelConfirmation(true)}
-                            className="px-6 py-3 bg-gradient-to-r from-red-500 to-red-600 text-white font-semibold rounded-lg hover:shadow-lg hover:shadow-red-500/25 transition-all duration-300 hover:scale-105"
-                          >
-                            Cancel Subscription
-                          </button>
-                          ) : (
+                          {currentSubscription.plan != 'free' && (
+                            currentSubscription.status === 'active' ? (
                             <button
-                              onClick={handleResumeSubscription}
-                              className="px-6 py-3 bg-gradient-to-br from-green-400 to-green-600 text-white font-semibold rounded-lg hover:shadow-lg hover:shadow-red-500/25 transition-all duration-300 hover:scale-105"
+                              onClick={() => setShowCancelConfirmation(true)}
+                              className="px-6 py-3 bg-gradient-to-r from-red-500 to-red-600 text-white font-semibold rounded-lg hover:shadow-lg hover:shadow-red-500/25 transition-all duration-300 hover:scale-105"
                             >
-                              Resume Subscription
+                              Cancel Subscription
                             </button>
+                            ) : (
+                              <button
+                                onClick={handleResumeSubscription}
+                                className="px-6 py-3 bg-gradient-to-br from-green-400 to-green-600 text-white font-semibold rounded-lg hover:shadow-lg hover:shadow-red-500/25 transition-all duration-300 hover:scale-105"
+                              >
+                                Resume Subscription
+                              </button>
+                            )
                           )}
                         </div>
                       </div>

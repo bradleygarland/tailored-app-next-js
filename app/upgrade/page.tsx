@@ -47,7 +47,7 @@ export default function Upgrade() {
     }
   };
 
-  const handleCheckout = async (plan: 'starter' | 'pro', interval: 'monthly' | 'yearly') => {
+  const handleCheckout = async (plan: 'starter' | 'pro', interval: 'month' | 'year') => {
     const res = await fetch('/api/stripe/create-checkout-session', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -60,10 +60,12 @@ export default function Upgrade() {
       }),
     });
 
-    const data: { url?: string; error?: string } = await res.json();
+    const data: { url?: string; message?: string; error?: string } = await res.json();
 
     if (data.url) {
       window.location.href = data.url;
+    } else if (data.message) {
+      console.log(data.message);
     } else {
       console.error('Checkout failed: ' + (data.error ?? 'Unknown error'));
     }
@@ -86,6 +88,7 @@ export default function Upgrade() {
       }
 
       setCurrentPlan(`${subscription?.plan}_${subscription?.interval}`);
+      console.log(`${subscription?.plan}_${subscription?.interval}`)
     })();
   }, [user])
 
@@ -127,26 +130,26 @@ export default function Upgrade() {
                   </li>
                 </ul>
                 {isAnnual ? (
-                  currentPlan === 'starter_yearly' ? (
+                  currentPlan === 'starter_year' ? (
                     <Button className="w-full bg-muted text-muted-foreground" disabled>
                       Current
                     </Button>
                   ) : (
                     <Button
                       className="w-full"
-                      onClick={() => handleCheckout('starter', 'yearly')}
+                      onClick={() => handleCheckout('starter', 'year')}
                     >
                       Select Starter
                     </Button>
                 )) : (
-                  currentPlan === 'starter_monthly' ? (
+                  currentPlan === 'starter_month' ? (
                     <Button className="w-full bg-muted text-muted-foreground" disabled>
                       Current
                     </Button>
                   ) : (
                     <Button
                       className="w-full"
-                      onClick={() => handleCheckout('starter', 'monthly')}
+                      onClick={() => handleCheckout('starter', 'month')}
                     >
                       Select Starter
                     </Button>
@@ -178,26 +181,26 @@ export default function Upgrade() {
                   </li>
                 </ul>
                 {isAnnual ? (
-                  currentPlan === 'pro_yearly' ? (
+                  currentPlan === 'pro_year' ? (
                     <Button className="w-full bg-muted text-muted-foreground" disabled>
                       Current
                     </Button>
                   ) : (
                     <Button
                       className="w-full"
-                      onClick={() => handleCheckout('pro', 'yearly')}
+                      onClick={() => handleCheckout('pro', 'year')}
                     >
                       Select Pro
                     </Button>
                   )) : (
-                  currentPlan === 'pro_yearly' ? (
+                  currentPlan === 'pro_month' ? (
                     <Button className="w-full bg-muted text-muted-foreground" disabled>
                       Current
                     </Button>
                   ) : (
                     <Button
                       className="w-full"
-                      onClick={() => handleCheckout('pro', 'monthly')}
+                      onClick={() => handleCheckout('pro', 'month')}
                     >
                       Select Pro
                     </Button>
